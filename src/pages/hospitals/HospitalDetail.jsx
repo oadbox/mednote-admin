@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, CreditCard, Activity, Hourglass, LogIn, Hash, Receipt, Globe, BadgeCheck, User, Power, KeyRound, Copy, Check, Boxes, Save, Info, Lock, Smartphone, RotateCcw, Trash2, AlertTriangle, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, CreditCard, Activity, Hourglass, LogIn, Hash, Receipt, Globe, BadgeCheck, User, Power, KeyRound, Copy, Check, Boxes, Save, Info, Lock, Smartphone, RotateCcw, Trash2, AlertTriangle, ShieldAlert, Wrench } from 'lucide-react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
@@ -687,6 +687,25 @@ function DangerZone({ hospitalId, hospital, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [resetResult, setResetResult] = useState(null); // { tempPassword, adminEmail } after a hard reset
   const [copied, setCopied] = useState(false);
+  const [repairing, setRepairing] = useState(false);
+
+  const doRepair = async () => {
+    setRepairing(true);
+    try {
+      const res = await api.post(endpoints.hospitals.repair(hospitalId));
+      const result = res.data?.data || res.data;
+      toast.success(
+        result?.repaired
+          ? `Tenant repaired (schema: ${result.schemaCreated}, admin: ${result.adminCreated})`
+          : 'No repair needed'
+      );
+      onChanged?.();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Repair failed');
+    } finally {
+      setRepairing(false);
+    }
+  };
 
   const slug = hospital.slug || '';
   const armed = confirmText.trim() === slug && !!slug;
@@ -755,6 +774,25 @@ function DangerZone({ hospitalId, hospital, onChanged }) {
       </p>
 
       <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50/40 dark:bg-blue-900/10">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Repair tenant schema</p>
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
+              Safe, non-destructive — fills in any tables/columns this hospital's schema is missing (e.g. from a hospital
+              created before a later feature shipped). Existing data is never touched or dropped.
+            </p>
+          </div>
+          <Button
+            variant="secondary"
+            icon={Wrench}
+            loading={repairing}
+            className="shrink-0"
+            onClick={doRepair}
+          >
+            Repair
+          </Button>
+        </div>
+
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-900/10">
           <div className="min-w-0">
             <p className="text-sm font-medium text-gray-900 dark:text-slate-100">Hard reset tenant</p>
