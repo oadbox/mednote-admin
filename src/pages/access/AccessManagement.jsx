@@ -126,6 +126,7 @@ const PERMISSION_GROUPS = [
   },
   { label: "Reports & AI", perms: ["reports:view", "ai:view"] },
   { label: "ABDM", perms: ["abdm:view", "abdm:manage"] },
+  { label: "Dermatology", perms: ["dermatology:view", "dermatology:manage"] },
   {
     label: "System",
     perms: [
@@ -165,6 +166,8 @@ const BASELINE = {
     "ipd:view",
     "ipd:admit",
     "abdm:view",
+    "dermatology:view",
+    "dermatology:manage",
   ],
   receptionist: [
     "dashboard:view",
@@ -185,6 +188,8 @@ const BASELINE = {
     "settings:view",
     "ipd:view",
     "ipd:admit",
+    "dermatology:view",
+    "dermatology:manage",
   ],
   nurse: [
     "dashboard:view",
@@ -199,6 +204,8 @@ const BASELINE = {
     "leaves:create",
     "ipd:view",
     "ipd:nursing",
+    "dermatology:view",
+    "dermatology:manage",
   ],
   pharmacist: [
     "dashboard:view",
