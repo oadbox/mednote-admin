@@ -68,6 +68,32 @@ async function tryRefresh() {
   return refreshPromise;
 }
 
+// Platform-admin IP allowlist (backend middleware/adminIpGate.js): a 403 with
+// errors[0].code === 'IP_NOT_ALLOWED' means this network isn't allowlisted.
+// Returns the IP the server saw ('' if not given), or null for any other error.
+export function blockedIpOf(error) {
+  const first = error?.response?.data?.errors?.[0];
+  if (error?.response?.status === 403 && first?.code === 'IP_NOT_ALLOWED') return first.ip || '';
+  return null;
+}
+
+// Session is unusable from this network — drop it and show the login page with
+// a "not available from this network" notice (Login.jsx reads ?blocked=).
+let blockedRedirect = false;
+export function forceBlockedLogout(ip) {
+  if (blockedRedirect) return;
+  blockedRedirect = true;
+  try {
+    localStorage.removeItem('hms_admin_token');
+    localStorage.removeItem('hms_admin_user');
+  } catch (_) { /* private mode etc. */ }
+  if (window.location.pathname !== '/login') {
+    window.location.replace(`/login?blocked=${encodeURIComponent(ip || '')}`);
+  } else {
+    blockedRedirect = false;
+  }
+}
+
 // Centralizes the "your session is over, go to login" flow so every code
 // path leads to the same place. Idempotent — calling it twice in the same
 // tick is safe; only the first one navigates.
@@ -96,6 +122,14 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const original = error.config;
     const url = original?.url || '';
+
+    // Not allowed from this network — no retry/refresh can fix that. On the
+    // login page itself the form shows the message instead.
+    const blockedIp = blockedIpOf(error);
+    if (blockedIp !== null) {
+      forceBlockedLogout(blockedIp);
+      return Promise.reject(error);
+    }
 
     // ── Transient-failure retry (network/timeout/5xx) ──────────────────
     if (original && isTransient(error) && isSafeToRetry(original)) {
@@ -139,7 +173,14 @@ api.interceptors.response.use(
           original.headers.Authorization = `Bearer ${newToken}`;
           return api(original);
         }
-      } catch (_) { /* fall through to forceLogout */ }
+      } catch (refreshError) {
+        const refreshBlockedIp = blockedIpOf(refreshError);
+        if (refreshBlockedIp !== null) {
+          forceBlockedLogout(refreshBlockedIp);
+          return Promise.reject(error);
+        }
+        /* otherwise fall through to forceLogout */
+      }
     }
 
     if (status === 401 && !isAuthEndpoint) {

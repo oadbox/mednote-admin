@@ -138,6 +138,11 @@ const endpoints = {
     stats: `${PLATFORM}/support-tickets/stats`,
   },
 
+  // Security — platform-admin IP allowlist
+  security: {
+    ipAllowlist: `${PLATFORM}/security/ip-allowlist`,
+  },
+
   // Public platform settings (no auth)
   publicSettings: `${PLATFORM}/public-settings`,
 

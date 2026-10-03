@@ -1,16 +1,19 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import toast from 'react-hot-toast';
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles, AlertCircle } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, Sparkles, AlertCircle, ShieldAlert } from 'lucide-react';
 import { useAuth } from '../../hooks/useAuth';
 import HeartRateLoader from '../../components/ui/HeartRateLoader';
+import { blockedIpOf } from '../../api/axios';
 
 // Translate raw backend errors into something a human can act on.
 function friendlyLoginError(err) {
   if (!err.response) return "Couldn't reach the server. Check your connection and try again.";
+  const blockedIp = blockedIpOf(err);
+  if (blockedIp !== null) return blockedNotice(blockedIp);
   const status = err.response?.status;
   const raw = String(err.response?.data?.message || '').toLowerCase();
   if (/invalid.*credential|incorrect|wrong.*password|email.*not.*found|user.*not.*found/.test(raw)) {
@@ -27,6 +30,11 @@ function friendlyLoginError(err) {
   return err.response?.data?.message || 'Login failed. Please try again.';
 }
 
+// Platform-admin IP allowlist (Security page) refused this network.
+function blockedNotice(ip) {
+  return `The operator console isn't available from this network${ip ? ` (${ip})` : ''}. Connect from an allowed network, or ask a super admin to add this IP.`;
+}
+
 const schema = z.object({
   // Identifier may be an email OR a mobile number — the backend resolves either.
   // Kept under the `email` key so the login payload shape is unchanged.
@@ -37,6 +45,9 @@ const schema = z.object({
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  // Set by api/axios.js when a request was refused with IP_NOT_ALLOWED.
+  const [searchParams] = useSearchParams();
+  const blockedIp = searchParams.get('blocked');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [submitError, setSubmitError] = useState(null);
@@ -82,6 +93,13 @@ export default function Login() {
           Sign in to manage hospitals, plans and platform health.
         </p>
       </div>
+
+      {blockedIp !== null && !submitError && (
+        <div role="alert" className="mb-5 flex items-start gap-2 rounded-xl bg-rose-500/10 border border-rose-400/30 px-3 py-2 text-sm text-rose-200">
+          <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{blockedNotice(blockedIp)}</span>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         {/* Email */}

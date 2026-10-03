@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import {
   Search, LayoutDashboard, Building2, CreditCard, Receipt, FileText,
   Ticket, Megaphone, LifeBuoy, HelpCircle, ScrollText, BarChart3,
-  Settings, KeyRound, Plus, ArrowRight, Clock,
+  Settings, KeyRound, Plus, ArrowRight, Clock, ShieldCheck,
 } from 'lucide-react';
 import api from '../api/axios';
 import endpoints from '../api/endpoints';
@@ -32,6 +32,7 @@ const PAGES = [
   { id: 'p:logs',         label: 'Activity Logs',      path: '/activity-logs',     icon: ScrollText,      section: 'Platform',  keywords: ['audit'] },
   { id: 'p:reports',      label: 'Reports',            path: '/reports',           icon: BarChart3,       section: 'Platform',  keywords: ['analytics'] },
   { id: 'p:access',       label: 'Access Management',  path: '/access-management', icon: KeyRound,        section: 'System',    keywords: ['rbac', 'roles'] },
+  { id: 'p:security',     label: 'Security',           path: '/security',          icon: ShieldCheck,     section: 'System',    keywords: ['ip', 'allowlist', 'whitelist', 'network'] },
   { id: 'p:settings',     label: 'Settings',           path: '/settings',          icon: Settings,        section: 'System' },
 ];
 

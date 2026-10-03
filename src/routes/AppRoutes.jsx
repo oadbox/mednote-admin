@@ -56,6 +56,9 @@ import ReportsDashboard from '../pages/reports/ReportsDashboard';
 // Settings
 import SettingsPage from '../pages/settings/SettingsPage';
 
+// Security — platform-admin IP allowlist
+import SecurityPage from '../pages/security/SecurityPage';
+
 // Access Management — per-hospital role permission editor
 import AccessManagement from '../pages/access/AccessManagement';
 
@@ -137,6 +140,7 @@ export default function AppRoutes() {
         <Route path="/activity-logs" element={<ActivityLogList />} />
         <Route path="/reports" element={<ReportsDashboard />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/security" element={<SecurityPage />} />
         <Route path="/access-management" element={<AccessManagement />} />
 
         {/* 404 — confused-nurse illustration, sidebar + topbar visible */}
