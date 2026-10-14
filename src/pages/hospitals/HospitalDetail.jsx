@@ -13,6 +13,7 @@ import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import StatCard from '../../components/StatCard';
+import HospitalSubscriptionCard from './HospitalSubscriptionCard';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -24,7 +25,6 @@ export default function HospitalDetail() {
   const { isSuperAdmin } = useAuth();
   const [hospital, setHospital] = useState(null);
   const [stats, setStats] = useState(null);
-  const [subscriptions, setSubscriptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [impersonateOpen, setImpersonateOpen] = useState(false);
   const [impersonating, setImpersonating] = useState(false);
@@ -105,7 +105,6 @@ export default function HospitalDetail() {
       if (hRes.status === 'fulfilled') {
         const h = hRes.value.data.data || hRes.value.data;
         setHospital(h);
-        setSubscriptions(Array.isArray(h?.subscriptions) ? h.subscriptions : []);
       }
       if (sRes.status === 'fulfilled') setStats(sRes.value.data.data || sRes.value.data);
     } catch {
@@ -360,54 +359,7 @@ export default function HospitalDetail() {
 
       <ModulesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
 
-      <Card className="p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Subscription History</h2>
-          <CreditCard className="w-4 h-4 text-gray-400" />
-        </div>
-        {subscriptions.length === 0 ? (
-          <div className="text-center py-8">
-            <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-2">
-              <CreditCard className="w-5 h-5 text-gray-400" />
-            </div>
-            <p className="text-sm text-gray-500 dark:text-slate-400">No subscription history available.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {subscriptions.map((sub, idx) => {
-              const isActive = sub.status === 'active';
-              const isLast = idx === subscriptions.length - 1;
-              return (
-                <div key={sub.id || sub._id || idx} className="flex gap-4">
-                  <div className="flex flex-col items-center pt-4 shrink-0">
-                    <span className={`w-3 h-3 rounded-full ring-4 ring-white dark:ring-slate-900 ${isActive ? 'bg-indigo-600' : 'bg-gray-300 dark:bg-slate-600'}`} />
-                    {!isLast && <span className="flex-1 w-px mt-1 bg-gray-200 dark:bg-slate-700" />}
-                  </div>
-                  <div className="flex-1 flex items-center justify-between p-4 rounded-xl border border-gray-100 dark:border-slate-800 bg-gradient-to-r from-gray-50/60 to-white dark:from-slate-800/40 dark:to-slate-900 hover:shadow-sm transition-shadow">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isActive ? 'bg-indigo-50 dark:bg-indigo-900/30' : 'bg-gray-100 dark:bg-slate-800'}`}>
-                        <CreditCard className={`w-5 h-5 ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-400'}`} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{sub.plan?.name || sub.planName || 'Plan'}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                          {dayjs(sub.startDate).format('MMM D, YYYY')} → {dayjs(sub.endDate).format('MMM D, YYYY')}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      {sub.amount != null && (
-                        <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">{formatCurrency(sub.amount)}</span>
-                      )}
-                      <Badge color={isActive ? 'success' : 'gray'}>{sub.status}</Badge>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+      <HospitalSubscriptionCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={load} />
 
       {isSuperAdmin && <DangerZone hospitalId={id} hospital={hospital} onChanged={load} />}
 

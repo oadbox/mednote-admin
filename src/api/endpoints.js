@@ -35,6 +35,7 @@ const endpoints = {
     toggleStatus: (id) => `${PLATFORM}/hospitals/${id}/toggle-status`,
     stats: (id) => `${PLATFORM}/hospitals/${id}/stats`,
     subscriptions: (id) => `${PLATFORM}/hospitals/${id}/subscriptions`,
+    extendTrial: (id) => `${PLATFORM}/hospitals/${id}/extend-trial`,
     sweepExpiredTrials: `${PLATFORM}/hospitals/sweep-expired-trials`,
     resetAdminPassword: (id) => `${PLATFORM}/hospitals/${id}/reset-admin-password`,
     accessControl: (id) => `${PLATFORM}/hospitals/${id}/access-control`,

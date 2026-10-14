@@ -6,6 +6,7 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
+import DatePicker from '../../components/ui/DatePicker';
 import { formatCurrency } from '../../utils/formatters';
 
 const TYPES = [
@@ -31,6 +32,7 @@ export default function PaymentModal({ isOpen, onClose, subscription, onSuccess 
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState('cash');
   const [reference, setReference] = useState('');
+  const [paidAt, setPaidAt] = useState('');
   const [loading, setLoading] = useState(false);
 
   const total = Number(subscription?.amount || 0);
@@ -44,6 +46,7 @@ export default function PaymentModal({ isOpen, onClose, subscription, onSuccess 
     setAmount(String(remaining || total));
     setMethod('cash');
     setReference(subscription?.paymentRef || '');
+    setPaidAt(new Date().toISOString().slice(0, 10));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, subscription?.id]);
 
@@ -72,6 +75,7 @@ export default function PaymentModal({ isOpen, onClose, subscription, onSuccess 
         type,
         method,
         reference: reference || undefined,
+        paidAt: paidAt || undefined,
       });
       toast.success('Payment recorded');
       onSuccess?.();
@@ -123,7 +127,10 @@ export default function PaymentModal({ isOpen, onClose, subscription, onSuccess 
           disabled={type === 'full'}
         />
 
-        <Select label="Method" options={METHODS} value={method} onChange={setMethod} />
+        <div className="grid grid-cols-2 gap-4">
+          <Select label="Method" options={METHODS} value={method} onChange={setMethod} />
+          <DatePicker label="Payment date" value={paidAt} onChange={setPaidAt} isClearable={false} />
+        </div>
 
         <Input
           label="Reference (txn id / cheque no.)"
