@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Plus, CalendarClock, Wallet, Undo2, XCircle, Ban, RotateCcw, FileText, FilePlus2, Receipt, Send,
+  Plus, CalendarClock, Wallet, Undo2, XCircle, Ban, RotateCcw, FileText, FilePlus2, Receipt, Send, Pencil,
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
@@ -26,6 +26,19 @@ const toDay = (d) => (d ? dayjs(d).format('YYYY-MM-DD') : '');
 const fmt = (d) => (d ? dayjs(d).format('MMM D, YYYY') : '—');
 const apiError = (err, fallback) => err?.response?.data?.message || fallback;
 
+// What the backend's settle hook made of the GST invoice for a payment just
+// recorded (`invoice` on the response): the number when raised, a note while
+// orgnest is still answering, and — kept on screen longer — why it failed.
+const toastInvoice = (res, base) => {
+  const inv = res?.data?.data?.invoice;
+  if (inv?.status === 'raised' || inv?.status === 'already') toast.success(`${base} · invoice ${inv.number} raised in orgnest`);
+  else if (inv?.status === 'pending') toast.success(`${base} · raising the GST invoice in orgnest…`);
+  else if (inv?.status === 'failed') {
+    toast.success(base);
+    toast.error(`GST invoice not raised in orgnest: ${inv.error} — retry from the row.`, { duration: 10000 });
+  } else toast.success(base);
+};
+
 const ICON_BTN = 'inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed dark:border-slate-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200';
 
 // The revenue ledger for one hospital (super-admin hospital page): every rupee
@@ -37,11 +50,14 @@ const ICON_BTN = 'inline-flex h-8 w-8 items-center justify-center rounded-lg bor
 // OrgCharges. Backend: /platform/charges.
 //
 // Self-serve payments (Razorpay, from the hospital's own Plan & Billing page)
-// land here too: `metadata.gateway` says how they were paid, and the GST
-// document is raised in orgnest when that integration is on
-// (`metadata.orgnest`, see docs/SELF_SERVE_BILLING.md) — else MedNote issues
-// its own platform Invoice. Both documents open from the invoice button.
-export default function HospitalChargesCard({ hospital, hospitalId: givenId, isSuperAdmin, onChanged }) {
+// land here too: `metadata.gateway` says how they were paid. With orgnest
+// invoicing on (`orgnestInvoicing` in the list response) every payment —
+// online or recorded here — gets its GST invoice raised in orgnest the moment
+// the charge is paid (`metadata.orgnest`, see docs/SELF_SERVE_BILLING.md);
+// the row's "Raise in orgnest" is only the retry. With it off, MedNote issues
+// its own platform Invoice from the generate button. Both documents open from
+// the invoice button.
+export default function HospitalChargesCard({ hospital, hospitalId: givenId, isSuperAdmin, onChanged, refreshKey }) {
   const hospitalId = givenId || hospital?.id;
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +65,7 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
   const [renewalOpen, setRenewalOpen] = useState(false);
   const [payTarget, setPayTarget] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
+  const [editTarget, setEditTarget] = useState(null);
   const [busyId, setBusyId] = useState(null);
 
   const load = useCallback(async () => {
@@ -63,17 +80,26 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
     }
   }, [hospitalId]);
 
-  useEffect(() => { load(); }, [load]);
+  // On mount, and whenever the parent says the ledger moved (a period recorded
+  // on the Subscription card is mirrored here). The orgnest invoice for a
+  // payment is raised in the background, so look once more a few seconds
+  // later to pick up its number.
+  useEffect(() => {
+    load();
+    const t = setTimeout(load, 8000);
+    return () => clearTimeout(t);
+  }, [load, refreshKey]);
 
   // Any write changes the hospital's tiles and possibly its subscription
-  // period, so refresh both this card and the parent page.
-  const refresh = () => { load(); onChanged?.(); };
+  // period, so refresh both this card and the parent page — and once more
+  // later, for an invoice number orgnest is still producing.
+  const refresh = () => { load(); onChanged?.(); setTimeout(load, 8000); };
 
   const act = async (id, url, ok, fail) => {
     setBusyId(id);
     try {
-      await api.post(url);
-      toast.success(ok);
+      const res = await api.post(url);
+      toast.success(res.data?.message || ok);
       refresh();
     } catch (err) {
       toast.error(apiError(err, fail));
@@ -128,6 +154,7 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
 
   const summary = data?.summary || {};
   const items = data?.items || [];
+  const orgnestOn = !!data?.orgnestInvoicing;
   const hospitalName = hospital?.name;
 
   return (
@@ -138,6 +165,7 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
           <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
             Every rupee billed to this hospital — subscription terms and one-off fees — and what has been collected.
             Online payments from the hospital&apos;s Plan &amp; Billing page land here too.
+            {orgnestOn && ' Every payment, online or recorded here, has its GST invoice raised in orgnest as it is paid.'}
           </p>
         </div>
         {isSuperAdmin && (
@@ -276,13 +304,17 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
                           )}
                           {/* An online payment was collected by the gateway; only a hand-recorded one can be reverted. */}
                           {c.status === 'paid' && !linked && !online && (
-                            <button type="button" title="Revert payment" aria-label="Revert payment" className={ICON_BTN} disabled={busy}
+                            <button type="button" title={orgnestNumber ? `Revert payment (credits invoice ${orgnestNumber} in orgnest)` : 'Revert payment'} aria-label="Revert payment" className={ICON_BTN} disabled={busy}
                               onClick={() => act(c.id, endpoints.charges.unpay(c.id), 'Payment reverted', 'Could not revert the payment')}>
                               <Undo2 className="h-4 w-4" />
                             </button>
                           )}
                           {c.status === 'pending' && (
                             <>
+                              <button type="button" title="Edit amount / GST" aria-label="Edit charge" className={ICON_BTN} disabled={busy}
+                                onClick={() => setEditTarget(c)}>
+                                <Pencil className="h-4 w-4" />
+                              </button>
                               <button type="button" title="Waive (write off)" aria-label="Waive" className={ICON_BTN} disabled={busy}
                                 onClick={() => act(c.id, endpoints.charges.waive(c.id), 'Charge waived', 'Could not waive the charge')}>
                                 <Ban className="h-4 w-4" />
@@ -305,12 +337,14 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
                               <FileText className="h-4 w-4" />
                             </button>
                           )}
-                          {live && !hasDocument && c.status === 'paid' && online && (
+                          {/* The backend raises the invoice in orgnest as a charge is paid; this is the retry. */}
+                          {orgnestOn && live && !hasDocument && c.status === 'paid' && (
                             <Button size="sm" variant="secondary" icon={Send} loading={busy} onClick={() => raiseOrgnest(c)}>
                               {orgnest?.lastError ? 'Retry in orgnest' : 'Raise in orgnest'}
                             </Button>
                           )}
-                          {live && !hasDocument && !(c.status === 'paid' && online) && (
+                          {/* With orgnest invoicing off, MedNote numbers its own platform invoice. */}
+                          {!orgnestOn && live && !hasDocument && (
                             <button type="button" title="Generate GST invoice" aria-label="Generate invoice" className={ICON_BTN} disabled={busy}
                               onClick={() => generateInvoice(c)}>
                               <FilePlus2 className="h-4 w-4" />
@@ -327,9 +361,10 @@ export default function HospitalChargesCard({ hospital, hospitalId: givenId, isS
         </div>
       )}
 
-      {feeOpen && <RecordFeeModal isOpen hospital={hospital || { id: hospitalId, name: hospitalName }} onClose={() => setFeeOpen(false)} onSaved={refresh} />}
-      {renewalOpen && <RaiseRenewalModal isOpen hospital={hospital || { id: hospitalId, name: hospitalName }} onClose={() => setRenewalOpen(false)} onSaved={refresh} />}
-      {payTarget && <MarkPaidModal isOpen charge={payTarget} onClose={() => setPayTarget(null)} onSaved={refresh} />}
+      {feeOpen && <RecordFeeModal isOpen hospital={hospital || { id: hospitalId, name: hospitalName }} orgnestOn={orgnestOn} onClose={() => setFeeOpen(false)} onSaved={refresh} />}
+      {renewalOpen && <RaiseRenewalModal isOpen hospital={hospital || { id: hospitalId, name: hospitalName }} orgnestOn={orgnestOn} onClose={() => setRenewalOpen(false)} onSaved={refresh} />}
+      {payTarget && <MarkPaidModal isOpen charge={payTarget} orgnestOn={orgnestOn} onClose={() => setPayTarget(null)} onSaved={refresh} />}
+      {editTarget && <EditChargeModal isOpen charge={editTarget} onClose={() => setEditTarget(null)} onSaved={refresh} />}
       <ConfirmDialog
         isOpen={!!cancelTarget}
         onClose={() => setCancelTarget(null)}
@@ -382,7 +417,10 @@ const emptyPayment = () => ({ amount: '', paidAt: today(), method: 'bank_transfe
 
 // ---- Record a one-off fee ---------------------------------------------------
 
-function RecordFeeModal({ isOpen, onClose, hospital, onSaved }) {
+// The GST invoice for a fee collected on the spot is raised in orgnest by the
+// backend as part of the save (orgnestOn); a hand-typed invoice number means
+// "invoiced elsewhere" and stops that.
+function RecordFeeModal({ isOpen, onClose, hospital, onSaved, orgnestOn }) {
   const planSetup = Number(hospital?.plan?.setupFee || 0);
   const [type, setType] = useState('setup_fee');
   // Seeded from the type so the form opens valid; follows the type picker
@@ -411,7 +449,7 @@ function RecordFeeModal({ isOpen, onClose, hospital, onSaved }) {
     if (blocker) { toast.error(blocker); return; }
     setSaving(true);
     try {
-      await api.post(endpoints.charges.forHospital(hospital.id), {
+      const res = await api.post(endpoints.charges.forHospital(hospital.id), {
         type,
         description: description.trim(),
         amount: Number(amount),
@@ -425,7 +463,7 @@ function RecordFeeModal({ isOpen, onClose, hospital, onSaved }) {
         paymentMethod: paidNow ? payment.method || null : null,
         paymentRef: paidNow ? payment.reference.trim() || null : null,
       });
-      toast.success(paidNow ? 'Fee recorded as paid' : 'Fee recorded');
+      toastInvoice(res, paidNow ? 'Fee recorded as paid' : 'Fee recorded');
       onClose();
       onSaved?.();
     } catch (err) {
@@ -481,6 +519,14 @@ function RecordFeeModal({ isOpen, onClose, hospital, onSaved }) {
         {paidNow
           ? <PaymentFields value={payment} onChange={(p) => setPayment((v) => ({ ...v, ...p }))} />
           : <DatePicker label="Due on" value={dueAt} onChange={setDueAt} />}
+        {orgnestOn && (
+          <p className="-mt-2 text-xs text-gray-500 dark:text-slate-400">
+            {paidNow
+              ? 'The GST invoice is raised in orgnest and emailed to the hospital on save.'
+              : 'The GST invoice is raised in orgnest when the payment is recorded.'}
+            {' '}Fill in an invoice number only if this was invoiced elsewhere — none is raised then.
+          </p>
+        )}
 
         <Input label="Note (optional)" placeholder="Anything worth remembering about this charge" value={note} onChange={(e) => setNote(e.target.value)} />
 
@@ -509,7 +555,7 @@ function RecordFeeModal({ isOpen, onClose, hospital, onSaved }) {
 // period only once it is collected. Prefilled from the server's draft: the
 // term that follows whatever was last billed, at the hospital's own rate,
 // with GST at the platform default rate (plan prices are ex-GST).
-function RaiseRenewalModal({ isOpen, onClose, hospital, onSaved }) {
+function RaiseRenewalModal({ isOpen, onClose, hospital, onSaved, orgnestOn }) {
   const [draft, setDraft] = useState(null);
   const [draftError, setDraftError] = useState(null);
   const [description, setDescription] = useState('');
@@ -554,7 +600,7 @@ function RaiseRenewalModal({ isOpen, onClose, hospital, onSaved }) {
     if (blocker) { toast.error(blocker); return; }
     setSaving(true);
     try {
-      await api.post(endpoints.charges.forHospital(hospital.id), {
+      const res = await api.post(endpoints.charges.forHospital(hospital.id), {
         type: 'subscription',
         description: description.trim(),
         amount: Number(amount),
@@ -572,7 +618,7 @@ function RaiseRenewalModal({ isOpen, onClose, hospital, onSaved }) {
         paymentRef: paidNow ? payment.reference.trim() || null : null,
         advanceSubscription: advance,
       });
-      toast.success(paidNow && advance ? 'Renewal recorded and period opened' : 'Renewal raised');
+      toastInvoice(res, paidNow && advance ? 'Renewal recorded and period opened' : paidNow ? 'Renewal recorded' : 'Renewal raised');
       onClose();
       onSaved?.();
     } catch (err) {
@@ -634,6 +680,14 @@ function RaiseRenewalModal({ isOpen, onClose, hospital, onSaved }) {
           Already collected
         </label>
         {paidNow && <PaymentFields value={payment} onChange={(p) => setPayment((v) => ({ ...v, ...p }))} />}
+        {orgnestOn && (
+          <p className="-mt-2 text-xs text-gray-500 dark:text-slate-400">
+            {paidNow
+              ? 'The GST invoice is raised in orgnest and emailed to the hospital on save.'
+              : 'The GST invoice is raised in orgnest when the payment is recorded.'}
+            {' '}Fill in an invoice number only if this was invoiced elsewhere — none is raised then.
+          </p>
+        )}
 
         <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
           <input type="checkbox" className="w-4 h-4 mt-0.5" checked={advance} onChange={(e) => setAdvance(e.target.checked)} />
@@ -659,9 +713,96 @@ function RaiseRenewalModal({ isOpen, onClose, hospital, onSaved }) {
   );
 }
 
+// ---- Re-price an open charge -----------------------------------------------
+//
+// Description, amount, GST, invoice number and note of a charge nobody has
+// paid yet. A charge that mirrors a subscription period keeps its amount (the
+// period owns the price — change it there) but its GST is editable, since the
+// period is ex-GST and the tax lives only on the ledger. That is how a term
+// recorded before GST reached the subscription dialog gets its GST added.
+function EditChargeModal({ isOpen, charge, onClose, onSaved }) {
+  const linked = !!charge.subscriptionId;
+  const [description, setDescription] = useState(charge.description || '');
+  const [amount, setAmount] = useState(String(charge.amount ?? ''));
+  const [taxAmount, setTaxAmount] = useState(Number(charge.taxAmount) > 0 ? String(charge.taxAmount) : '');
+  const [invoiceNumber, setInvoiceNumber] = useState(charge.invoiceNumber || '');
+  const [note, setNote] = useState(charge.note || '');
+  const [saving, setSaving] = useState(false);
+
+  const total = (Number(amount) || 0) + (Number(taxAmount) || 0);
+  const blocker = description.trim().length < 2 ? 'Add a description'
+    : amount === '' || !(Number(amount) >= 0) ? 'Amount must be 0 or more'
+    : taxAmount !== '' && !(Number(taxAmount) >= 0) ? 'GST must be 0 or more'
+    : null;
+
+  const submit = async () => {
+    if (blocker) { toast.error(blocker); return; }
+    // Send only what changed — the backend refuses an amount change on a
+    // mirrored charge, so an untouched amount must not travel.
+    const patch = {};
+    if (description.trim() !== (charge.description || '')) patch.description = description.trim();
+    if (!linked && Number(amount) !== Number(charge.amount)) patch.amount = Number(amount);
+    const tax = taxAmount === '' ? 0 : Number(taxAmount);
+    if (tax !== Number(charge.taxAmount || 0)) patch.taxAmount = tax;
+    if ((invoiceNumber.trim() || null) !== (charge.invoiceNumber || null)) patch.invoiceNumber = invoiceNumber.trim() || null;
+    if ((note.trim() || null) !== (charge.note || null)) patch.note = note.trim() || null;
+    if (Object.keys(patch).length === 0) { onClose(); return; }
+    setSaving(true);
+    try {
+      await api.patch(endpoints.charges.update(charge.id), patch);
+      toast.success('Charge updated');
+      onClose();
+      onSaved?.();
+    } catch (err) {
+      toast.error(apiError(err, 'Could not update the charge'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title="Edit charge" size="lg">
+      <div className="space-y-4">
+        <div className="rounded-lg bg-gray-50 dark:bg-slate-800/60 p-3 text-sm">
+          <p className="font-medium text-gray-900 dark:text-slate-100">{typeLabel(charge.type)} · {formatCurrency(charge.total)}</p>
+          <p className="text-xs text-gray-500 dark:text-slate-400">
+            Charged {fmt(charge.chargedAt)}
+            {charge.periodStart && charge.periodEnd && <> · {fmt(charge.periodStart)} → {fmt(charge.periodEnd)}</>}
+          </p>
+        </div>
+
+        <Input label="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <Input label="Amount (₹)" type="number" min="0" step="0.01" value={amount} disabled={linked} onChange={(e) => setAmount(e.target.value)} />
+            {linked && (
+              <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">Set by the subscription period.</p>
+            )}
+          </div>
+          <Input label="GST (₹)" type="number" min="0" step="0.01" placeholder="blank if inclusive" value={taxAmount} onChange={(e) => setTaxAmount(e.target.value)} />
+          <Input label="Invoice no. (optional)" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
+        </div>
+
+        <Input label="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <p className="text-sm text-gray-500 dark:text-slate-400">
+            {blocker || <>Total <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(total)}</span></>}
+          </p>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button onClick={submit} loading={saving} disabled={!!blocker}>Save</Button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ---- Collect an existing charge ---------------------------------------------
 
-function MarkPaidModal({ isOpen, charge, onClose, onSaved }) {
+function MarkPaidModal({ isOpen, charge, onClose, onSaved, orgnestOn }) {
   const [payment, setPayment] = useState(() => ({
     amount: String(charge.balance ?? charge.total ?? ''),
     paidAt: today(),
@@ -685,7 +826,7 @@ function MarkPaidModal({ isOpen, charge, onClose, onSaved }) {
     if (blocker) { toast.error(blocker); return; }
     setSaving(true);
     try {
-      await api.post(endpoints.charges.pay(charge.id), {
+      const res = await api.post(endpoints.charges.pay(charge.id), {
         amount: amt,
         paidAt: payment.paidAt,
         paymentMethod: payment.method || null,
@@ -693,7 +834,7 @@ function MarkPaidModal({ isOpen, charge, onClose, onSaved }) {
         invoiceNumber: invoiceNumber.trim() || null,
         advanceSubscription: advance,
       });
-      toast.success(settles ? 'Charge marked paid' : 'Part payment recorded');
+      toastInvoice(res, settles ? 'Charge marked paid' : 'Part payment recorded');
       onClose();
       onSaved?.();
     } catch (err) {
@@ -736,6 +877,14 @@ function MarkPaidModal({ isOpen, charge, onClose, onSaved }) {
         )}
 
         <Input label="Invoice no. (optional)" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
+        {orgnestOn && !charge.invoiceId && (
+          <p className="-mt-2 text-xs text-gray-500 dark:text-slate-400">
+            {settles
+              ? 'Once settled, the GST invoice is raised in orgnest and emailed to the hospital.'
+              : 'The GST invoice is raised in orgnest once the balance is settled.'}
+            {' '}Fill in an invoice number only if this was invoiced elsewhere — none is raised then.
+          </p>
+        )}
 
         {opensPeriod && (
           <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">

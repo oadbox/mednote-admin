@@ -38,6 +38,10 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
   // is otherwise derived from the plan so we never setState inside an effect.
   const [endOverride, setEndOverride] = useState(null);
   const [amountOverride, setAmountOverride] = useState(null);
+  // GST on the ex-GST period price: auto at the platform default rate until
+  // the operator types a figure (0 = inclusive / nil-rated).
+  const [gstRate, setGstRate] = useState(18);
+  const [taxOverride, setTaxOverride] = useState(null);
   const [recordNow, setRecordNow] = useState(true);
   const [payType, setPayType] = useState('full');
   const [payAmount, setPayAmount] = useState('');
@@ -56,6 +60,16 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
       .catch(() => setPlans([]));
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get(endpoints.settings.platform)
+      .then((res) => {
+        const r = Number(res.data?.data?.defaultGstRate);
+        if (Number.isFinite(r)) setGstRate(r);
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
   // Seed defaults each time the modal opens: same plan (a plain renewal), a new
   // period continuing from the current end date (or today if it already lapsed).
   useEffect(() => {
@@ -68,6 +82,7 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
     setStartDate(toDay(start));
     setEndOverride(null);
     setAmountOverride(null);
+    setTaxOverride(null);
     setRecordNow(true);
     setPayType('full');
     setPayAmount('');
@@ -90,6 +105,10 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
   const amount = amountOverride ?? (selectedPlan ? String(selectedPlan.price ?? '') : '');
 
   const periodAmount = Number(amount || 0);
+  const autoTax = periodAmount > 0 ? round2((periodAmount * gstRate) / 100) : 0;
+  const taxAmount = taxOverride ?? (autoTax > 0 ? String(autoTax) : '');
+  const periodTax = Number(taxAmount || 0);
+  const periodTotal = round2(periodAmount + periodTax);
   const currentPlanId = subscription?.plan?.id || subscription?.planId || '';
   const isChangingPlan = !!planId && planId !== currentPlanId;
 
@@ -98,10 +117,15 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
     if (!startDate || !endDate) { toast.error('Set start and end dates'); return; }
     if (endDate <= startDate) { toast.error('End date must be after the start date'); return; }
     if (!Number.isFinite(periodAmount) || periodAmount < 0) { toast.error('Enter a valid amount'); return; }
+    if (!Number.isFinite(periodTax) || periodTax < 0) { toast.error('GST must be 0 or more'); return; }
 
-    const payload = { planId, startDate, endDate, amount: periodAmount };
+    const payload = {
+      planId, startDate, endDate, amount: periodAmount,
+      taxAmount: periodTax,
+      ...(taxOverride === null && periodTax > 0 ? { gstRate } : {}),
+    };
     if (recordNow) {
-      const amt = payType === 'full' ? periodAmount : Number(payAmount);
+      const amt = payType === 'full' ? periodTotal : Number(payAmount);
       if (!Number.isFinite(amt) || amt <= 0) { toast.error('Enter a valid payment amount'); return; }
       payload.payment = { type: payType, amount: round2(amt), method, reference: reference || undefined };
     }
@@ -154,13 +178,29 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
           />
         </div>
 
-        <Input
-          label="Period Amount"
-          type="number"
-          min="0"
-          value={amount}
-          onChange={(e) => setAmountOverride(e.target.value)}
-        />
+        <div className="grid grid-cols-2 gap-4">
+          <Input
+            label="Period Amount (ex-GST)"
+            type="number"
+            min="0"
+            value={amount}
+            onChange={(e) => { setAmountOverride(e.target.value); setTaxOverride(null); }}
+          />
+          <Input
+            label="GST (₹)"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0 if inclusive"
+            value={taxAmount}
+            onChange={(e) => setTaxOverride(e.target.value)}
+          />
+        </div>
+        <p className="-mt-2 text-xs text-gray-500 dark:text-slate-400">
+          {taxOverride === null
+            ? <>GST at {gstRate}% on the ex-GST price. Edit it if this hospital is billed differently, or enter 0 if the price is inclusive.</>
+            : <>GST entered by hand. Retype the amount to go back to {gstRate}%.</>}
+        </p>
 
         <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
           <input
@@ -179,7 +219,7 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
               label="Payment amount"
               type="number"
               min="0"
-              value={payType === 'full' ? String(periodAmount) : payAmount}
+              value={payType === 'full' ? String(periodTotal) : payAmount}
               onChange={(e) => setPayAmount(e.target.value)}
               disabled={payType === 'full'}
             />
@@ -195,7 +235,8 @@ export default function RenewModal({ isOpen, onClose, subscription, onSuccess })
 
         <div className="flex items-center justify-between pt-2">
           <p className="text-sm text-gray-500 dark:text-slate-400">
-            New period total: <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(periodAmount)}</span>
+            New period total: <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(periodTotal)}</span>
+            {periodTax > 0 && <span className="ml-1 text-xs">({formatCurrency(periodAmount)} + {formatCurrency(periodTax)} GST)</span>}
           </p>
           <div className="flex gap-3">
             <Button variant="secondary" onClick={onClose}>Cancel</Button>

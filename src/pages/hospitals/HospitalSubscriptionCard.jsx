@@ -27,6 +27,7 @@ const PAY_TONE = { paid: 'success', partial: 'warning', advance: 'info', pending
 
 const toDay = (d) => (d ? dayjs(d).format('YYYY-MM-DD') : '');
 const hasValue = (v) => v !== null && v !== undefined && v !== '';
+const round2 = (n) => Math.round(Number(n) * 100) / 100;
 
 // Subscription for one hospital (super-admin hospital page): the plan, the
 // period timeline, and the commercial actions — record a subscription period
@@ -184,6 +185,12 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
   const [customPrice, setCustomPrice] = useState(hasValue(hospital.customPrice) ? String(Number(hospital.customPrice)) : '');
   const [priceNote, setPriceNote] = useState(hospital.customPriceNote || '');
   const [amountOverride, setAmountOverride] = useState(null);
+  // GST on the (ex-GST) period price — plan prices are quoted without tax, the
+  // same as Raise Renewal and the self-serve checkout. Worked out at the
+  // platform default rate until the admin types a figure; 0 when the price is
+  // inclusive or the hospital is nil-rated.
+  const [gstRate, setGstRate] = useState(18);
+  const [taxOverride, setTaxOverride] = useState(null);
   const [collected, setCollected] = useState(true);
   const [paidAt, setPaidAt] = useState(toDay(today));
   const [method, setMethod] = useState('bank_transfer');
@@ -203,6 +210,16 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
       .catch(() => setPlans([]));
   }, [isOpen]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    api.get(endpoints.settings.platform)
+      .then((res) => {
+        const r = Number(res.data?.data?.defaultGstRate);
+        if (Number.isFinite(r)) setGstRate(r);
+      })
+      .catch(() => {});
+  }, [isOpen]);
+
   const plan = useMemo(() => plans.find((p) => p.value === planId), [plans, planId]);
   const autoEnd = startDate && plan
     ? toDay(dayjs(startDate).add(Number(plan.durationInDays) || 30, 'day'))
@@ -211,6 +228,9 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
   const listPrice = plan ? Number(plan.price || 0) : 0;
   const rate = customPrice.trim() === '' ? listPrice : Number(customPrice);
   const amount = amountOverride ?? String(Number.isFinite(rate) ? rate : '');
+  const autoTax = Number(amount) > 0 ? round2((Number(amount) * gstRate) / 100) : 0;
+  const taxAmount = taxOverride ?? (autoTax > 0 ? String(autoTax) : '');
+  const total = round2((Number(amount) || 0) + (Number(taxAmount) || 0));
   const movingPlan = !!planId && planId !== (hospital.planId || hospital.plan?.id);
   const startsLater = startDate && dayjs(startDate).isAfter(dayjs(), 'day');
 
@@ -219,7 +239,8 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
     : endDate <= startDate ? 'Period end must be after the start'
     : customPrice.trim() !== '' && !(Number(customPrice) >= 0) ? 'Custom price must be 0 or more'
     : amount === '' || !(Number(amount) >= 0) ? 'Enter a valid amount'
-    : collected && Number(amount) > 0 && !paidAt ? 'Set the payment date'
+    : taxAmount !== '' && !(Number(taxAmount) >= 0) ? 'GST must be 0 or more'
+    : collected && total > 0 && !paidAt ? 'Set the payment date'
     : null;
 
   const submit = async () => {
@@ -229,10 +250,14 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
       startDate,
       endDate,
       amount: Number(amount),
+      taxAmount: taxAmount === '' ? 0 : Number(taxAmount),
+      // The rate only when GST is the auto figure — a hand-typed amount is its
+      // own statement of the rate.
+      ...(taxOverride === null && Number(taxAmount) > 0 ? { gstRate } : {}),
       customPrice: customPrice.trim() === '' ? null : Number(customPrice),
       customPriceNote: priceNote.trim() || null,
     };
-    if (collected && Number(amount) > 0) {
+    if (collected && total > 0) {
       payload.payment = { type: 'full', method, reference: reference.trim() || undefined, paidAt };
     }
     setSaving(true);
@@ -260,7 +285,7 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
           </p>
         </div>
 
-        <Select label="Plan" options={plans} value={planId} onChange={(v) => { setPlanId(v); setEndOverride(null); setAmountOverride(null); }} placeholder="Select a plan" />
+        <Select label="Plan" options={plans} value={planId} onChange={(v) => { setPlanId(v); setEndOverride(null); setAmountOverride(null); setTaxOverride(null); }} placeholder="Select a plan" />
         {movingPlan && (
           <p className="-mt-2 text-xs text-blue-600 dark:text-blue-400">
             Moves the hospital onto this plan (modules follow the new plan unless overridden).
@@ -286,7 +311,7 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
               step="0.01"
               placeholder={`list ${listPrice}`}
               value={customPrice}
-              onChange={(e) => { setCustomPrice(e.target.value); setAmountOverride(null); }}
+              onChange={(e) => { setCustomPrice(e.target.value); setAmountOverride(null); setTaxOverride(null); }}
             />
             <Input
               label="Reason / note"
@@ -302,23 +327,40 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
           )}
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <DatePicker label="Period from" value={startDate} onChange={(v) => { setStartDate(v); setEndOverride(null); }} isClearable={false} />
           <DatePicker label="Period to" value={endDate} onChange={(v) => setEndOverride(v)} isClearable={false} />
-          <Input
-            label="Amount for this period (₹)"
-            type="number"
-            min="0"
-            step="0.01"
-            value={amount}
-            onChange={(e) => setAmountOverride(e.target.value)}
-          />
         </div>
         {startsLater && (
           <p className="-mt-2 text-xs text-gray-500 dark:text-slate-400">
             Starts after today — a prepaid renewal. The current term keeps running until then.
           </p>
         )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Input
+            label="Amount for this period (₹)"
+            type="number"
+            min="0"
+            step="0.01"
+            value={amount}
+            onChange={(e) => { setAmountOverride(e.target.value); setTaxOverride(null); }}
+          />
+          <Input
+            label="GST (₹)"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0 if inclusive"
+            value={taxAmount}
+            onChange={(e) => setTaxOverride(e.target.value)}
+          />
+        </div>
+        <p className="-mt-2 text-xs text-gray-500 dark:text-slate-400">
+          {taxOverride === null
+            ? <>GST at {gstRate}% on the ex-GST price, the same as renewals and online payments. Edit it if this hospital is billed differently, or enter 0 if the price is inclusive.</>
+            : <>GST entered by hand{Number(amount) > 0 && Number(taxAmount) >= 0 ? ` (${round2((Number(taxAmount) / Number(amount)) * 100)}%)` : ''}. Clear the amount field and retype it to go back to {gstRate}%.</>}
+        </p>
 
         <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
           <input type="checkbox" className="w-4 h-4" checked={collected} onChange={(e) => setCollected(e.target.checked)} />
@@ -335,8 +377,9 @@ function RecordSubscriptionModal({ isOpen, onClose, hospital, current, onSaved }
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <p className="text-sm text-gray-500 dark:text-slate-400">
             {blocker || (
-              <>Period total <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(Number(amount) || 0)}</span>
-                {!collected && Number(amount) > 0 && ' · recorded as outstanding'}</>
+              <>Period total <span className="font-semibold text-gray-900 dark:text-slate-100">{formatCurrency(total)}</span>
+                {Number(taxAmount) > 0 && ` (${formatCurrency(Number(amount) || 0)} + ${formatCurrency(Number(taxAmount))} GST)`}
+                {!collected && total > 0 && ' · recorded as outstanding'}</>
             )}
           </p>
           <div className="flex gap-3">

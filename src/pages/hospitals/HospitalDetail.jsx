@@ -31,6 +31,9 @@ export default function HospitalDetail() {
   const [impersonating, setImpersonating] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [resetting, setResetting] = useState(false);
+  // Bumped when the Subscription card writes, so the ledger below re-reads:
+  // a period recorded there is mirrored as a charge (and invoiced in orgnest).
+  const [ledgerKey, setLedgerKey] = useState(0);
   const [newPassword, setNewPassword] = useState('');
   const [resetResult, setResetResult] = useState(null); // { tempPassword, email } after a successful reset
   const [copied, setCopied] = useState(false);
@@ -360,10 +363,10 @@ export default function HospitalDetail() {
 
       <ModulesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
 
-      <HospitalSubscriptionCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={load} />
+      <HospitalSubscriptionCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={() => { load(); setLedgerKey((k) => k + 1); }} />
 
       {/* Revenue ledger — subscription terms + one-off fees, collect / waive / invoice. */}
-      <HospitalChargesCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={load} />
+      <HospitalChargesCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={load} refreshKey={ledgerKey} />
 
       {isSuperAdmin && <DangerZone hospitalId={id} hospital={hospital} onChanged={load} />}
 

@@ -99,8 +99,9 @@ const endpoints = {
     cancel: (id) => `${PLATFORM}/charges/${id}/cancel`,
     reopen: (id) => `${PLATFORM}/charges/${id}/reopen`,
     invoice: (id) => `${PLATFORM}/charges/${id}/invoice`,
-    // Self-serve payments: raise/re-try the orgnest invoice; fetch the invoice
-    // document (orgnest PDF, or the platform invoice as printable HTML).
+    // Raise/re-try the orgnest invoice for a paid charge (the backend raises it
+    // on payment; this is the retry); fetch the invoice document (orgnest PDF,
+    // or the platform invoice as printable HTML).
     raiseOrgnest: (id) => `${PLATFORM}/charges/${id}/orgnest`,
     invoiceDocument: (id) => `${PLATFORM}/charges/${id}/invoice-document`,
   },
