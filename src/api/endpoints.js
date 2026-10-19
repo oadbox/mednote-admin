@@ -69,6 +69,7 @@ const endpoints = {
   plans: {
     list: `${PLATFORM}/plans`,
     modules: `${PLATFORM}/plans/modules`,
+    addons: `${PLATFORM}/plans/addons`,
     create: `${PLATFORM}/plans`,
     get: (id) => `${PLATFORM}/plans/${id}`,
     update: (id) => `${PLATFORM}/plans/${id}`,

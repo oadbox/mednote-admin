@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Select from '../../components/ui/Select';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import PlanForm from './PlanForm';
+import AddonsCard from './AddonsCard';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -172,6 +173,8 @@ export default function PlanList() {
           />
         }
       />
+
+      <AddonsCard isSuperAdmin={isSuperAdmin} />
 
       <PlanForm
         key={formOpen ? (editingPlan?.id || editingPlan?._id || 'new') : 'closed'}
