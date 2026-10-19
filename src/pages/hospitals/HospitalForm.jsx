@@ -41,6 +41,9 @@ const schema = z.object({
   isActive: z.boolean().optional(),
   isTrial: z.boolean().optional(),
   trialEndsAt: z.string().optional().or(z.literal('')),
+  // One-time setup cost raised on the revenue ledger at onboarding. Free text
+  // from a number input; validated below so blank means "no setup fee".
+  setupFee: z.string().optional().or(z.literal('')),
   adminName: optionalNameField('Admin name'),
   adminEmail: z.string().email('Invalid admin email').optional().or(z.literal('')),
   adminPassword: z.string().min(6, 'Min 6 characters').optional().or(z.literal('')),
@@ -52,6 +55,9 @@ const schema = z.object({
   // becomes the admin's sign-in credential).
   (d) => (d.email && d.email.trim()) || (d.phone && d.phone.trim()),
   { message: 'Provide an email or a phone number', path: ['email'] },
+).refine(
+  (d) => !d.setupFee || (Number.isFinite(Number(d.setupFee)) && Number(d.setupFee) >= 0),
+  { message: 'Setup fee must be 0 or more', path: ['setupFee'] },
 );
 
 function deriveSlug(name) {
@@ -85,7 +91,7 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
     resolver: zodResolver(schema),
     defaultValues: {
       name: '', slug: '', email: '', phone: '', address: '', country: 'India', city: '', state: '', pincode: '',
-      planId: '', planStartDate: '', planEndDate: '', gstin: '', isActive: true, isTrial: false, trialEndsAt: '',
+      planId: '', planStartDate: '', planEndDate: '', gstin: '', isActive: true, isTrial: false, trialEndsAt: '', setupFee: '',
       adminName: '', adminEmail: '', adminPassword: '',
     },
   });
@@ -95,6 +101,17 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
   const planIdValue = watch('planId');
   const [slugTouched, setSlugTouched] = useState(false);
   const [datesTouched, setDatesTouched] = useState(false);
+  const [setupFeeTouched, setSetupFeeTouched] = useState(false);
+
+  // Pre-fill the one-time setup fee from the selected plan on create until the
+  // operator edits it. Blank = no setup fee is raised.
+  useEffect(() => {
+    if (isEditing || setupFeeTouched) return;
+    const plan = plans.find((p) => p.value === planIdValue);
+    if (!plan) return;
+    const fee = Number(plan.setupFee || 0);
+    setValue('setupFee', fee > 0 ? String(fee) : '', { shouldValidate: false });
+  }, [planIdValue, plans, isEditing, setupFeeTouched, setValue]);
 
   // Auto-fill slug from name on create until the user types in the slug field.
   useEffect(() => {
@@ -122,7 +139,7 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
         .then((res) => {
           const d = res.data.data || res.data;
           const list = d.plans || d.rows || d.items || (Array.isArray(d) ? d : []);
-          setPlans(list.map((p) => ({ value: p.id || p._id, label: p.name, durationInDays: p.durationInDays })));
+          setPlans(list.map((p) => ({ value: p.id || p._id, label: p.name, durationInDays: p.durationInDays, setupFee: p.setupFee })));
         })
         .catch(() => { toast.error('Could not load plans'); setPlans([]); });
       api.get(endpoints.settings.locations)
@@ -170,6 +187,7 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
         isActive: source.isActive !== undefined ? !!source.isActive : (source.status !== 'suspended'),
         isTrial: !!source.isTrial,
         trialEndsAt: source.trialEndsAt ? new Date(source.trialEndsAt).toISOString().slice(0, 10) : '',
+        setupFee: '',
         // Older tenants may not have an explicit `admin` row returned by the
         // backend — fall back to the hospital's own contact name/email so the
         // form is never blank on edit.
@@ -180,11 +198,12 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
     } else if (!isEditing) {
       reset({
         name: '', slug: '', email: '', phone: '', address: '', city: '', state: '', pincode: '',
-        planId: '', planStartDate: '', planEndDate: '', gstin: '', isActive: true, isTrial: false, trialEndsAt: '',
+        planId: '', planStartDate: '', planEndDate: '', gstin: '', isActive: true, isTrial: false, trialEndsAt: '', setupFee: '',
         adminName: '', adminEmail: '', adminPassword: '',
       });
       setSlugTouched(false);
       setDatesTouched(false);
+      setSetupFeeTouched(false);
     }
   }, [fullHospital, hospital, isEditing, reset]);
 
@@ -199,11 +218,15 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
         if (!payload.adminEmail) delete payload.adminEmail;
         // Slug is the tenant identifier and cannot change after creation
         delete payload.slug;
+        // The setup fee is a ledger charge raised at onboarding, not a hospital attribute
+        delete payload.setupFee;
         await api.put(endpoints.hospitals.update(hospital.id || hospital._id), payload);
         toast.success('Hospital updated');
       } else {
         const payload = { ...data };
         if (!payload.slug) delete payload.slug;
+        if (payload.setupFee === '' || payload.setupFee === undefined) delete payload.setupFee;
+        else payload.setupFee = Number(payload.setupFee);
         await api.post(endpoints.hospitals.create, payload);
         toast.success('Hospital created');
       }
@@ -259,7 +282,17 @@ export default function HospitalForm({ isOpen, onClose, hospital, onSuccess }) {
               <Select label="Plan" options={plans} placeholder="Select a plan" error={errors.planId?.message} {...field} />
             )}
           />
-          <div />
+          {isEditing ? <div /> : (
+            <Input
+              label="Setup fee (one-time, optional)"
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="raised as an unpaid charge"
+              error={errors.setupFee?.message}
+              {...register('setupFee', { onChange: () => setSetupFeeTouched(true) })}
+            />
+          )}
           <Controller
             control={control}
             name="planStartDate"

@@ -28,18 +28,19 @@ const PAY_TONE = { paid: 'success', partial: 'warning', advance: 'info', pending
 const toDay = (d) => (d ? dayjs(d).format('YYYY-MM-DD') : '');
 const hasValue = (v) => v !== null && v !== undefined && v !== '';
 
-// Subscription & revenue for one hospital (super-admin hospital page): what it
-// is billed, what has been collected, the period timeline, and the commercial
-// actions — record a subscription period (renew or move plan, with the
-// hospital's negotiated price and an optional payment), extend the trial, and
-// collect against an outstanding period.
+// Subscription for one hospital (super-admin hospital page): the plan, the
+// period timeline, and the commercial actions — record a subscription period
+// (renew or move plan, with the hospital's negotiated price and an optional
+// payment), extend the trial, and collect against an outstanding period. The
+// Billed / Collected / Outstanding roll-up and one-off fees live on the
+// Billing ledger card below (HospitalChargesCard); every period recorded here
+// is mirrored there automatically.
 export default function HospitalSubscriptionCard({ hospital, isSuperAdmin, onChanged }) {
   const [recordOpen, setRecordOpen] = useState(false);
   const [trialOpen, setTrialOpen] = useState(false);
   const [payTarget, setPayTarget] = useState(null);
 
   const subscriptions = Array.isArray(hospital.subscriptions) ? hospital.subscriptions : [];
-  const summary = hospital.billingSummary || {};
   const now = dayjs();
   const current = subscriptions.find((s) => s.status === 'active' && dayjs(s.endDate).isAfter(now)) || null;
   const isCustom = hasValue(hospital.customPrice);
@@ -82,17 +83,6 @@ export default function HospitalSubscriptionCard({ hospital, isSuperAdmin, onCha
             </Button>
           </div>
         )}
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-        <Tile label="Billed" value={formatCurrency(summary.billed || 0)} />
-        <Tile label="Collected" value={formatCurrency(summary.collected || 0)} tone="text-emerald-600 dark:text-emerald-400" />
-        <Tile
-          label="Outstanding"
-          value={formatCurrency(summary.outstanding || 0)}
-          tone={summary.outstanding > 0 ? 'text-amber-600 dark:text-amber-400' : undefined}
-        />
-        <Tile label="Last payment" value={summary.lastPaidAt ? dayjs(summary.lastPaidAt).format('MMM D, YYYY') : '—'} />
       </div>
 
       {subscriptions.length === 0 ? (
@@ -171,15 +161,6 @@ export default function HospitalSubscriptionCard({ hospital, isSuperAdmin, onCha
         onSuccess={onChanged}
       />
     </Card>
-  );
-}
-
-function Tile({ label, value, tone }) {
-  return (
-    <div className="rounded-xl border border-gray-100 dark:border-slate-800 p-3">
-      <p className="text-[11px] uppercase tracking-wide text-gray-400">{label}</p>
-      <p className={`mt-1 text-lg font-semibold tabular-nums ${tone || 'text-gray-900 dark:text-slate-100'}`}>{value}</p>
-    </div>
   );
 }
 

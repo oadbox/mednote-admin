@@ -84,6 +84,27 @@ const endpoints = {
     renew: (id) => `${PLATFORM}/billing/${id}/renew`,
   },
 
+  // Revenue ledger — subscription renewals + one-off fees per hospital
+  charges: {
+    revenue: `${PLATFORM}/charges/revenue`,
+    overview: `${PLATFORM}/charges/revenue/overview`,
+    runRenewals: `${PLATFORM}/charges/run-renewals`,
+    forHospital: (hospitalId) => `${PLATFORM}/charges/hospital/${hospitalId}`,
+    nextSubscription: (hospitalId) => `${PLATFORM}/charges/hospital/${hospitalId}/next-subscription`,
+    get: (id) => `${PLATFORM}/charges/${id}`,
+    update: (id) => `${PLATFORM}/charges/${id}`,
+    pay: (id) => `${PLATFORM}/charges/${id}/pay`,
+    unpay: (id) => `${PLATFORM}/charges/${id}/unpay`,
+    waive: (id) => `${PLATFORM}/charges/${id}/waive`,
+    cancel: (id) => `${PLATFORM}/charges/${id}/cancel`,
+    reopen: (id) => `${PLATFORM}/charges/${id}/reopen`,
+    invoice: (id) => `${PLATFORM}/charges/${id}/invoice`,
+    // Self-serve payments: raise/re-try the orgnest invoice; fetch the invoice
+    // document (orgnest PDF, or the platform invoice as printable HTML).
+    raiseOrgnest: (id) => `${PLATFORM}/charges/${id}/orgnest`,
+    invoiceDocument: (id) => `${PLATFORM}/charges/${id}/invoice-document`,
+  },
+
   // FAQs
   faqs: {
     list: `${PLATFORM}/faqs`,
@@ -150,6 +171,17 @@ const endpoints = {
   // Notifications
   notifications: {
     list: `${PLATFORM}/notifications`,
+  },
+
+  // Payments & invoicing connections (Razorpay for our fees, orgnest Invoicing API)
+  integrations: {
+    get: `${PLATFORM}/integrations`,
+    update: `${PLATFORM}/integrations`,
+    testRazorpay: `${PLATFORM}/integrations/razorpay/test`,
+    testOrgnest: `${PLATFORM}/integrations/orgnest/test`,
+    orgnestStatus: `${PLATFORM}/integrations/orgnest/status`,
+    orgnestRaise: `${PLATFORM}/integrations/orgnest/raise`,
+    paymentEvents: `${PLATFORM}/integrations/payment-events`,
   },
 
   // Settings

@@ -34,12 +34,19 @@ const schema = z.object({
   description: z.string().optional(),
   billingCycle: z.enum(['monthly', 'yearly']),
   price: z.coerce.number().min(0, 'Price must be 0 or more'),
+  setupFee: z.coerce.number().min(0, 'Setup fee must be 0 or more').optional(),
   durationInDays: z.coerce.number().min(1, 'Duration must be at least 1'),
   maxUsers: z.coerce.number().min(1, 'Must allow at least 1 user'),
   maxAdmins: z.coerce.number().min(1, 'Must allow at least 1 admin'),
   maxDoctors: z.coerce.number().min(0).optional(),
   maxPatients: z.coerce.number().min(0).optional(),
   trialDays: z.coerce.number().min(0).optional(),
+  // Website / self-serve presentation
+  isPublic: z.boolean().optional(),
+  highlight: z.boolean().optional(),
+  sortOrder: z.coerce.number().int().optional(),
+  tagline: z.string().max(200, 'Keep the tagline under 200 characters').optional(),
+  highlights: z.string().optional(),
 });
 
 export default function PlanForm({ isOpen, onClose, plan, onSuccess }) {
@@ -63,12 +70,15 @@ export default function PlanForm({ isOpen, onClose, plan, onSuccess }) {
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      name: '', description: '', billingCycle: 'monthly', price: 0, durationInDays: 30,
+      name: '', description: '', billingCycle: 'monthly', price: 0, setupFee: 0, durationInDays: 30,
       maxUsers: 10, maxAdmins: 1, maxDoctors: 5, maxPatients: 500, trialDays: 14,
+      isPublic: true, highlight: false, sortOrder: 0, tagline: '', highlights: '',
     },
   });
 
   const billingCycle = useWatch({ control, name: 'billingCycle' });
+  const isPublic = useWatch({ control, name: 'isPublic' }) !== false;
+  const highlightOn = Boolean(useWatch({ control, name: 'highlight' }));
 
   // Load the module catalog once when the form opens.
   useEffect(() => {
@@ -90,17 +100,24 @@ export default function PlanForm({ isOpen, onClose, plan, onSuccess }) {
         description: plan.description || '',
         billingCycle: plan.billingCycle === 'yearly' ? 'yearly' : 'monthly',
         price: plan.price || 0,
+        setupFee: plan.setupFee || 0,
         durationInDays: plan.durationInDays || 30,
         maxUsers: plan.maxUsers || 10,
         maxAdmins: plan.maxAdmins || 1,
         maxDoctors: plan.maxDoctors || 5,
         maxPatients: plan.maxPatients || 500,
         trialDays: plan.trialDays || 0,
+        isPublic: plan.isPublic !== false,
+        highlight: Boolean(plan.highlight),
+        sortOrder: plan.sortOrder ?? 0,
+        tagline: plan.tagline || '',
+        highlights: Array.isArray(plan.highlights) ? plan.highlights.join('\n') : '',
       });
     } else {
       reset({
-        name: '', description: '', billingCycle: 'monthly', price: 0, durationInDays: 30,
+        name: '', description: '', billingCycle: 'monthly', price: 0, setupFee: 0, durationInDays: 30,
         maxUsers: 10, maxAdmins: 1, maxDoctors: 5, maxPatients: 500, trialDays: 14,
+      isPublic: true, highlight: false, sortOrder: 0, tagline: '', highlights: '',
       });
     }
   }, [plan, reset]);
@@ -182,6 +199,9 @@ export default function PlanForm({ isOpen, onClose, plan, onSuccess }) {
         <div className="grid grid-cols-2 gap-4">
           <Input label="Plan Name" error={errors.name?.message} {...register('name')} onKeyDown={blockDigits} />
           <Input label={`Price (${currencySymbol}/${cycleSuffix})`} type="number" error={errors.price?.message} {...register('price')} />
+          {/* One-time onboarding cost. A default only — it pre-fills the setup
+              fee charge raised when a hospital joins on this plan. */}
+          <Input label={`Setup fee (${currencySymbol}, one-time)`} type="number" error={errors.setupFee?.message} {...register('setupFee')} />
           <Input label="Duration (days)" type="number" error={errors.durationInDays?.message} {...register('durationInDays')} />
           <Input label="Trial Days" type="number" error={errors.trialDays?.message} {...register('trialDays')} />
           <Input label="Max Users" type="number" error={errors.maxUsers?.message} {...register('maxUsers')} />
@@ -191,6 +211,25 @@ export default function PlanForm({ isOpen, onClose, plan, onSuccess }) {
           <div className="col-span-2">
             <Input label="Description" error={errors.description?.message} {...register('description')} />
           </div>
+        </div>
+
+        {/* Website / self-serve presentation. Public plans appear on mednote.in
+            /pricing and in each hospital's Plan & Billing page (via the public
+            pricing API); highlights are the marketing bullets shown there instead
+            of the raw module list. */}
+        <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 space-y-3">
+          <p className="text-sm font-medium text-gray-700 dark:text-slate-300">Website &amp; self-serve</p>
+          <div className="grid grid-cols-2 gap-3">
+            <Toggle label="Show on website & in-app plan picker" checked={isPublic} onChange={() => setValue('isPublic', !isPublic, { shouldDirty: true })} />
+            <Toggle label='"Most popular" ribbon' checked={highlightOn} onChange={() => setValue('highlight', !highlightOn, { shouldDirty: true })} />
+            <Input label="Sort order (low first)" type="number" error={errors.sortOrder?.message} {...register('sortOrder')} />
+            <Input label="Tagline (one line under the name)" error={errors.tagline?.message} {...register('tagline')} />
+            <div className="col-span-2">
+              <Input label="Highlights (one per line — marketing bullets for the website)" type="textarea" rows={4} error={errors.highlights?.message} {...register('highlights')} />
+            </div>
+          </div>
+          <input type="hidden" {...register('isPublic')} />
+          <input type="hidden" {...register('highlight')} />
         </div>
 
         <div>
@@ -222,5 +261,21 @@ export default function PlanForm({ isOpen, onClose, plan, onSuccess }) {
         </div>
       </form>
     </Modal>
+  );
+}
+
+function Toggle({ label, checked, onChange }) {
+  return (
+    <label className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800/60 cursor-pointer">
+      <div
+        onClick={onChange}
+        role="switch"
+        aria-checked={checked}
+        className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer flex-shrink-0 ${checked ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}
+      >
+        <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${checked ? 'translate-x-4' : 'translate-x-0.5'}`} />
+      </div>
+      <span className="text-sm text-gray-700 dark:text-slate-300">{label}</span>
+    </label>
   );
 }

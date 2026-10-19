@@ -69,12 +69,25 @@ export default function PlanList() {
     {
       header: 'Plan Name',
       accessor: 'name',
-      cell: (row) => <span className="font-medium text-gray-900">{row.name}</span>,
+      cell: (row) => (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="font-medium text-gray-900 dark:text-slate-100">{row.name}</span>
+          {row.isPublic === false && <span className="rounded-full bg-gray-100 dark:bg-slate-700/60 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">Private</span>}
+          {row.highlight && <span className="rounded-full bg-emerald-100 dark:bg-emerald-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Most popular</span>}
+        </div>
+      ),
     },
     {
       header: 'Price',
       accessor: 'price',
-      cell: (row) => `${formatCurrency(row.price || 0)}/${row.billingCycle === 'yearly' ? 'yr' : 'mo'}`,
+      cell: (row) => (
+        <div>
+          <p>{formatCurrency(row.price || 0)}/{row.billingCycle === 'yearly' ? 'yr' : 'mo'}</p>
+          {Number(row.setupFee) > 0 && (
+            <p className="text-xs text-gray-500 dark:text-slate-400">+ {formatCurrency(row.setupFee)} setup</p>
+          )}
+        </div>
+      ),
     },
     {
       header: 'Duration',

@@ -24,8 +24,8 @@ import HospitalDetail from '../pages/hospitals/HospitalDetail';
 // Plans
 import PlanList from '../pages/plans/PlanList';
 
-// Billing
-import BillingList from '../pages/billing/BillingList';
+// Billing — revenue ledger + subscriptions tabs; /billing/:id is one period
+import BillingPage from '../pages/billing/BillingPage';
 import BillingDetail from '../pages/billing/BillingDetail';
 import RevenueDetails from '../pages/revenue/RevenueDetails';
 import RecurringRevenueDetails from '../pages/revenue/RecurringRevenueDetails';
@@ -126,7 +126,7 @@ export default function AppRoutes() {
         <Route path="/hospitals" element={<HospitalList />} />
         <Route path="/hospitals/:id" element={<HospitalDetail />} />
         <Route path="/plans" element={<PlanList />} />
-        <Route path="/billing" element={<BillingList />} />
+        <Route path="/billing" element={<BillingPage />} />
         <Route path="/billing/:id" element={<BillingDetail />} />
         <Route path="/revenue" element={<RevenueDetails />} />
         <Route path="/recurring-revenue" element={<RecurringRevenueDetails />} />

@@ -14,6 +14,7 @@ import Modal from '../../components/ui/Modal';
 import Input from '../../components/ui/Input';
 import StatCard from '../../components/StatCard';
 import HospitalSubscriptionCard from './HospitalSubscriptionCard';
+import HospitalChargesCard from './HospitalChargesCard';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -360,6 +361,9 @@ export default function HospitalDetail() {
       <ModulesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
 
       <HospitalSubscriptionCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={load} />
+
+      {/* Revenue ledger — subscription terms + one-off fees, collect / waive / invoice. */}
+      <HospitalChargesCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={load} />
 
       {isSuperAdmin && <DangerZone hospitalId={id} hospital={hospital} onChanged={load} />}
 
