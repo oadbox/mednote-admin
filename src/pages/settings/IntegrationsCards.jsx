@@ -6,7 +6,7 @@
 // says whether one is set.
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Receipt, PlugZap, RefreshCw, Copy, Check } from 'lucide-react';
+import { CreditCard, Receipt, PlugZap, RefreshCw, Copy, Check, Eye, EyeOff, KeyRound } from 'lucide-react';
 import dayjs from 'dayjs';
 import api from '../../api/axios';
 import endpoints from '../../api/endpoints';
@@ -32,6 +32,53 @@ function Toggle({ label, checked, onChange, disabled }) {
       </div>
       <span className="text-sm text-gray-700 dark:text-slate-300">{label}</span>
     </label>
+  );
+}
+
+// Password-style input with reveal and copy, and optionally a Generate button.
+// Razorpay never issues the webhook secret — it is whatever string the
+// merchant types into the webhook form — so it can be minted here: generate,
+// copy it across to the Razorpay dashboard, then save. 32 random bytes as hex.
+function randomSecret() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function SecretField({ label, value, onChange, disabled, generate, hint, className = '' }) {
+  const [show, setShow] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!value) return;
+    try { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* ignore */ }
+  };
+  const mint = () => {
+    onChange(randomSecret());
+    setShow(true);
+  };
+  return (
+    <div className={className}>
+      <p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">{label}</p>
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <Input
+            type={show ? 'text' : 'password'}
+            autoComplete="off"
+            spellCheck={false}
+            className={show ? 'font-mono text-xs' : ''}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+          />
+        </div>
+        <Button type="button" variant="secondary" size="sm" icon={show ? EyeOff : Eye} title={show ? 'Hide' : 'Show'} aria-label={show ? 'Hide secret' : 'Show secret'} onClick={() => setShow((s) => !s)} />
+        <Button type="button" variant="secondary" size="sm" icon={copied ? Check : Copy} title="Copy" aria-label="Copy secret" disabled={!value} onClick={copy} />
+        {generate && !disabled && (
+          <Button type="button" variant="secondary" size="sm" icon={KeyRound} onClick={mint}>Generate</Button>
+        )}
+      </div>
+      {hint && <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{hint}</p>}
+    </div>
   );
 }
 
@@ -123,9 +170,22 @@ export function PaymentsCard({ canEdit }) {
           <Toggle label="Accept online payments" checked={form.enabled} onChange={(v) => setForm((f) => ({ ...f, enabled: v }))} disabled={!canEdit} />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input label="Key ID" placeholder="rzp_live_…" value={form.keyId} onChange={(e) => setForm((f) => ({ ...f, keyId: e.target.value }))} disabled={!canEdit} />
-            <Input label={`Key secret${rz.hasKeySecret ? ' (saved — leave blank to keep)' : ''}`} type="password" autoComplete="off" value={form.keySecret} onChange={(e) => setForm((f) => ({ ...f, keySecret: e.target.value }))} disabled={!canEdit} />
-            <Input label={`Webhook secret${rz.hasWebhookSecret ? ' (saved — leave blank to keep)' : ''}`} type="password" autoComplete="off" value={form.webhookSecret} onChange={(e) => setForm((f) => ({ ...f, webhookSecret: e.target.value }))} disabled={!canEdit} />
-            <CopyField label="Webhook URL" value={rz.webhookUrl} />
+            <SecretField
+              label={`Key secret${rz.hasKeySecret ? ' (saved — leave blank to keep)' : ''}`}
+              value={form.keySecret}
+              onChange={(v) => setForm((f) => ({ ...f, keySecret: v }))}
+              disabled={!canEdit}
+            />
+            <SecretField
+              label={`Webhook secret${rz.hasWebhookSecret ? ' (saved — leave blank to keep)' : ''}`}
+              value={form.webhookSecret}
+              onChange={(v) => setForm((f) => ({ ...f, webhookSecret: v }))}
+              disabled={!canEdit}
+              generate
+              hint="Razorpay doesn't issue this — you choose it. Generate one, paste the same value into the webhook's Secret field in the Razorpay dashboard, then save here."
+              className="sm:col-span-2"
+            />
+            <div className="sm:col-span-2"><CopyField label="Webhook URL" value={rz.webhookUrl} /></div>
           </div>
           {canEdit && (
             <div className="flex flex-wrap justify-end gap-2">
@@ -226,9 +286,10 @@ export function OrgnestInvoicingCard({ canEdit }) {
         {og && (og.enabled && og.configured ? <Badge color="success">On</Badge> : og.configured ? <Badge color="warning">Configured, off</Badge> : <Badge>Not set up</Badge>)}
       </div>
       <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
-        Every online payment is invoiced in orgnest, which numbers the GST invoice, emails it to the hospital and keeps the PDF — the same
-        arrangement as Hisabe and Rupit. Create the key in orgnest → Settings → Invoicing API (bound to the Oadbox business unit and the
-        MedNote project, with this API server's address allowed). Payments recorded by hand are invoiced by hand.
+        Every payment — collected online or recorded by hand on a hospital&apos;s ledger — is invoiced in orgnest as it is paid; orgnest
+        numbers the GST invoice, emails it to the hospital and keeps the PDF, the same arrangement as Hisabe and Rupit. Create the key in
+        orgnest → Settings → Invoicing API (bound to the Oadbox business unit and the MedNote project, with this API server&apos;s address
+        allowed). A charge given an invoice number by hand counts as invoiced elsewhere and is left alone.
         {og && !og.enabled && ' While it is off, MedNote numbers and renders its own invoice using the Invoice / GST identity above.'}
       </p>
       {!cfg ? (
