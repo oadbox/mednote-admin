@@ -14,7 +14,7 @@ import toast from 'react-hot-toast';
 import {
   Search, LayoutDashboard, Building2, CreditCard, Receipt, FileText,
   Ticket, Megaphone, LifeBuoy, HelpCircle, ScrollText, BarChart3,
-  Settings, KeyRound, Plus, ArrowRight, Clock, ShieldCheck,
+  Settings, KeyRound, Plus, ArrowRight, Clock, ShieldCheck, Gauge,
 } from 'lucide-react';
 import api from '../api/axios';
 import endpoints from '../api/endpoints';
@@ -30,6 +30,7 @@ const PAGES = [
   { id: 'p:support',      label: 'Support',            path: '/support',           icon: LifeBuoy,        section: 'Platform',  keywords: ['ticket', 'help'] },
   { id: 'p:faqs',         label: 'FAQs',               path: '/faqs',              icon: HelpCircle,      section: 'Platform',  keywords: ['help', 'kb'] },
   { id: 'p:logs',         label: 'Activity Logs',      path: '/activity-logs',     icon: ScrollText,      section: 'Platform',  keywords: ['audit'] },
+  { id: 'p:perf',         label: 'Performance',        path: '/performance',       icon: Gauge,           section: 'Platform',  keywords: ['slow', 'latency', 'speed', 'network'] },
   { id: 'p:reports',      label: 'Reports',            path: '/reports',           icon: BarChart3,       section: 'Platform',  keywords: ['analytics'] },
   { id: 'p:access',       label: 'Access Management',  path: '/access-management', icon: KeyRound,        section: 'System',    keywords: ['rbac', 'roles'] },
   { id: 'p:security',     label: 'Security',           path: '/security',          icon: ShieldCheck,     section: 'System',    keywords: ['ip', 'allowlist', 'whitelist', 'network'] },

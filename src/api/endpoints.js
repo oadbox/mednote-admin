@@ -162,6 +162,11 @@ const endpoints = {
     stats: `${PLATFORM}/support-tickets/stats`,
   },
 
+  // Performance — slow requests split into network vs server
+  performance: {
+    summary: `${PLATFORM}/performance/summary`,
+  },
+
   // Security — platform-admin IP allowlist
   security: {
     ipAllowlist: `${PLATFORM}/security/ip-allowlist`,

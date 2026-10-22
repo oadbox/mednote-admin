@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, Building2, CreditCard, Receipt, HelpCircle, ScrollText,
   BarChart3, Settings, ChevronsLeft, ChevronsRight, Ticket, FileText,
-  Megaphone, LifeBuoy, KeyRound, ShieldCheck,
+  Megaphone, LifeBuoy, KeyRound, ShieldCheck, Gauge,
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useTheme } from '../hooks/useTheme';
@@ -43,6 +43,7 @@ const navSections = [
       { label: 'FAQs', path: '/faqs', icon: HelpCircle },
       { label: 'Activity Logs', path: '/activity-logs', icon: ScrollText },
       { label: 'Reports', path: '/reports', icon: BarChart3 },
+      { label: 'Performance', path: '/performance', icon: Gauge },
     ],
   },
   {

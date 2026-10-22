@@ -53,6 +53,9 @@ import ActivityLogList from '../pages/activity-logs/ActivityLogList';
 // Reports
 import ReportsDashboard from '../pages/reports/ReportsDashboard';
 
+// Performance — slow requests, network vs server
+import PerformancePage from '../pages/performance/PerformancePage';
+
 // Settings
 import SettingsPage from '../pages/settings/SettingsPage';
 
@@ -139,6 +142,7 @@ export default function AppRoutes() {
         <Route path="/faqs" element={<FAQList />} />
         <Route path="/activity-logs" element={<ActivityLogList />} />
         <Route path="/reports" element={<ReportsDashboard />} />
+        <Route path="/performance" element={<PerformancePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/security" element={<SecurityPage />} />
         <Route path="/access-management" element={<AccessManagement />} />
