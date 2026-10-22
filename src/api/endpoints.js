@@ -181,6 +181,7 @@ const endpoints = {
     update: `${PLATFORM}/integrations`,
     testRazorpay: `${PLATFORM}/integrations/razorpay/test`,
     testOrgnest: `${PLATFORM}/integrations/orgnest/test`,
+    testFirebase: `${PLATFORM}/integrations/firebase/test`,
     orgnestStatus: `${PLATFORM}/integrations/orgnest/status`,
     orgnestRaise: `${PLATFORM}/integrations/orgnest/raise`,
     paymentEvents: `${PLATFORM}/integrations/payment-events`,

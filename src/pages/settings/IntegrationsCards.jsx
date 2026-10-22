@@ -6,7 +6,7 @@
 // says whether one is set.
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Receipt, PlugZap, RefreshCw, Copy, Check, Eye, EyeOff, KeyRound } from 'lucide-react';
+import { CreditCard, Receipt, PlugZap, RefreshCw, Copy, Check, Eye, EyeOff, KeyRound, BellRing, Upload } from 'lucide-react';
 import dayjs from 'dayjs';
 import api from '../../api/axios';
 import endpoints from '../../api/endpoints';
@@ -337,6 +337,182 @@ export function OrgnestInvoicingCard({ canEdit }) {
                 <Button type="button" variant="secondary" icon={PlugZap} loading={testing} onClick={test} disabled={!form.apiKey && !og.configured}>Test connection</Button>
                 <Button type="button" loading={saving} onClick={save}>Save orgnest settings</Button>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Push notifications to the MedNote mobile app (Firebase Cloud Messaging).
+// The service-account key stays on the server (write-only here, encrypted at
+// rest); the app config below is public and the app downloads it at startup
+// from /public/push-config, so changing project needs no app release.
+const FIREBASE_APP_FIELDS = [
+  ['projectId', 'Project ID'],
+  ['messagingSenderId', 'Sender ID (project number)'],
+  ['storageBucket', 'Storage bucket'],
+  ['androidAppId', 'Android app ID'],
+  ['androidApiKey', 'Android API key'],
+  ['iosAppId', 'iOS app ID'],
+  ['iosApiKey', 'iOS API key'],
+  ['iosBundleId', 'iOS bundle ID'],
+];
+
+export function FirebasePushCard({ canEdit }) {
+  const [cfg, setCfg] = useState(null);
+  const [form, setForm] = useState(null);
+  const [serviceAccount, setServiceAccount] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  const load = useCallback((data) => {
+    const fb = data.firebase || {};
+    setCfg(fb);
+    const next = { enabled: Boolean(fb.enabled) };
+    FIREBASE_APP_FIELDS.forEach(([k]) => { next[k] = fb[k] || ''; });
+    setForm(next);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(endpoints.integrations.get)
+      .then((res) => { if (!cancelled) load(res.data?.data || res.data); })
+      .catch((err) => { if (!cancelled) toast.error(serverError(err, 'Failed to load push settings')); });
+    return () => { cancelled = true; };
+  }, [load]);
+
+  const readFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    file.text().then(setServiceAccount).catch(() => toast.error('Could not read that file'));
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = { ...form, ...(serviceAccount.trim() ? { serviceAccount: serviceAccount.trim() } : {}) };
+      const res = await api.put(endpoints.integrations.update, { firebase: body });
+      load(res.data?.data || res.data);
+      setServiceAccount('');
+      toast.success('Push notification settings saved');
+    } catch (err) {
+      toast.error(serverError(err, 'Failed to save'), { duration: 8000 });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      const res = await api.post(endpoints.integrations.testFirebase, serviceAccount.trim() ? { serviceAccount: serviceAccount.trim() } : {});
+      toast.success(res.data?.message || 'Firebase accepted the key');
+    } catch (err) {
+      toast.error(serverError(err, 'Firebase rejected the key'), { duration: 8000 });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const clearKey = async () => {
+    if (!window.confirm('Remove the saved service-account key? Push notifications stop until a new key is saved.')) return;
+    setSaving(true);
+    try {
+      const res = await api.put(endpoints.integrations.update, { firebase: { serviceAccount: null } });
+      load(res.data?.data || res.data);
+      toast.success('Service-account key removed');
+    } catch (err) {
+      toast.error(serverError(err, 'Failed to remove the key'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-amber-100 dark:bg-amber-500/20 rounded-lg flex items-center justify-center">
+            <BellRing className="w-4 h-4 text-amber-600 dark:text-amber-300" />
+          </div>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">Push notifications (Firebase)</h2>
+        </div>
+        {cfg && (cfg.enabled && cfg.configured ? <Badge color="success">On</Badge>
+          : cfg.configured ? <Badge color="warning">Configured, off</Badge> : <Badge>Not set up</Badge>)}
+      </div>
+      <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+        Sends notifications to the MedNote mobile app for every hospital. The service-account key never leaves the server;
+        the app settings below are public and the app picks them up when it starts.
+        {cfg?.fromEnv && ' The key is currently read from the server environment; saving one here takes over.'}
+      </p>
+      {!form ? (
+        <div className="py-10 flex justify-center"><Spinner size="md" /></div>
+      ) : (
+        <div className="space-y-4">
+          <Toggle label="Send push notifications" checked={form.enabled} onChange={(v) => setForm((f) => ({ ...f, enabled: v }))} disabled={!canEdit} />
+
+          <div>
+            <p className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Service-account key</p>
+            {cfg.hasServiceAccount ? (
+              <p className="text-xs text-gray-600 dark:text-slate-300 mb-2">
+                Saved: <code>{cfg.serviceAccountEmail}</code> (project <code>{cfg.serviceAccountProject}</code>). Paste or upload a new one to replace it.
+              </p>
+            ) : (
+              <p className="text-xs text-gray-500 dark:text-slate-400 mb-2">
+                Firebase console → Project settings → Service accounts → Generate new private key. Paste the JSON or upload the file.
+              </p>
+            )}
+            <textarea
+              rows={4}
+              spellCheck={false}
+              autoComplete="off"
+              placeholder={'{ "type": "service_account", ... }'}
+              value={serviceAccount}
+              onChange={(e) => setServiceAccount(e.target.value)}
+              disabled={!canEdit}
+              className="w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-3 py-2 font-mono text-xs text-gray-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            {canEdit && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-200 cursor-pointer">
+                  <Upload className="w-3.5 h-3.5" /> Upload JSON file
+                  <input type="file" accept="application/json,.json" className="hidden" onChange={readFile} />
+                </label>
+                {cfg.hasServiceAccount && !cfg.fromEnv && (
+                  <button type="button" onClick={clearKey} className="px-3 py-1.5 text-xs font-medium rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20">
+                    Remove saved key
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div>
+            <p className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Mobile app settings</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {FIREBASE_APP_FIELDS.map(([key, label]) => (
+                <Input
+                  key={key}
+                  label={label}
+                  value={form[key]}
+                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                  disabled={!canEdit}
+                  spellCheck={false}
+                />
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+              From the Firebase console → Project settings → Your apps (google-services.json / GoogleService-Info.plist).
+            </p>
+          </div>
+
+          {canEdit && (
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="secondary" icon={PlugZap} loading={testing} onClick={test} disabled={!serviceAccount.trim() && !cfg.hasServiceAccount}>Test key</Button>
+              <Button type="button" loading={saving} onClick={save}>Save push settings</Button>
             </div>
           )}
         </div>
