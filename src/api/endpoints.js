@@ -41,6 +41,7 @@ const endpoints = {
     accessControl: (id) => `${PLATFORM}/hospitals/${id}/access-control`,
     saveAccessRole: (id, role) => `${PLATFORM}/hospitals/${id}/access-control/${role}`,
     modules: (id) => `${PLATFORM}/hospitals/${id}/modules`,
+    doctorFeatures: (id) => `${PLATFORM}/hospitals/${id}/doctor-features`,
   },
 
   // Coupons

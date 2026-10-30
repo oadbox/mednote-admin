@@ -15,6 +15,7 @@ import Input from '../../components/ui/Input';
 import StatCard from '../../components/StatCard';
 import HospitalSubscriptionCard from './HospitalSubscriptionCard';
 import HospitalChargesCard from './HospitalChargesCard';
+import HospitalDoctorFeaturesCard from './HospitalDoctorFeaturesCard';
 import { formatCurrency } from '../../utils/formatters';
 import { useAuth } from '../../hooks/useAuth';
 
@@ -362,6 +363,8 @@ export default function HospitalDetail() {
       <PatientLoginCard hospitalId={id} initialEnabled={hospital.patientLoginEnabled} isSuperAdmin={isSuperAdmin} />
 
       <ModulesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
+
+      <HospitalDoctorFeaturesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
 
       <HospitalSubscriptionCard hospital={hospital} isSuperAdmin={isSuperAdmin} onChanged={() => { load(); setLedgerKey((k) => k + 1); }} />
 
