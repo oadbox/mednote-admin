@@ -516,6 +516,12 @@ function AiPreviewCard({ hospitalId, initialEnabled, isSuperAdmin }) {
       {usage?.failedThisMonth > 0 && (
         <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">{usage.failedThisMonth} failed this month (not counted against the limit).</p>
       )}
+      {usage?.lastFailure?.error && (
+        <div className="mt-2 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-3 py-2 text-xs text-amber-900 dark:text-amber-200">
+          <span className="font-medium">Last failure</span> ({dayjs(usage.lastFailure.createdAt).format('DD MMM, h:mm A')} · {usage.lastFailure.model}):{' '}
+          <span className="break-words">{usage.lastFailure.error}</span>
+        </div>
+      )}
       {!isSuperAdmin && (
         <p className="text-xs text-gray-400 dark:text-slate-500 flex items-center gap-1.5 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700">
           <Lock className="w-3.5 h-3.5" /> Only a super admin can change AI image preview.
