@@ -530,7 +530,7 @@ const selectClass = 'w-full rounded-lg border border-gray-300 dark:border-slate-
 
 export function OpenAiCard({ canEdit }) {
   const [cfg, setCfg] = useState(null);
-  const [form, setForm] = useState({ enabled: true, apiKey: '', model: 'gpt-image-1', quality: 'medium', dailyLimit: 100 });
+  const [form, setForm] = useState({ enabled: true, apiKey: '', model: 'gpt-image-2.5-sunburst', quality: 'medium', dailyLimit: 100 });
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
 
@@ -542,7 +542,7 @@ export function OpenAiCard({ canEdit }) {
         const data = res.data?.data || res.data;
         setCfg(data);
         const o = data.openai || {};
-        setForm({ enabled: Boolean(o.enabled), apiKey: '', model: o.model || 'gpt-image-1', quality: o.quality || 'medium', dailyLimit: o.dailyLimit ?? 100 });
+        setForm({ enabled: Boolean(o.enabled), apiKey: '', model: o.model || 'gpt-image-2.5-sunburst', quality: o.quality || 'medium', dailyLimit: o.dailyLimit ?? 100 });
       })
       .catch((err) => { if (!cancelled) toast.error(serverError(err, 'Failed to load OpenAI settings')); });
     return () => { cancelled = true; };
@@ -594,7 +594,7 @@ export function OpenAiCard({ canEdit }) {
   };
 
   const o = cfg?.openai;
-  const models = o?.models || ['gpt-image-1'];
+  const models = o?.models || ['gpt-image-2.5-sunburst'];
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3 mb-1">
