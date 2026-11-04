@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, CreditCard, Activity, Hourglass, LogIn, Hash, Receipt, Globe, BadgeCheck, User, Power, KeyRound, Copy, Check, Boxes, Save, Info, Lock, Smartphone, RotateCcw, Trash2, AlertTriangle, ShieldAlert, Wrench } from 'lucide-react';
+import { ArrowLeft, Building2, Mail, Phone, MapPin, Calendar, CreditCard, Activity, Hourglass, LogIn, Hash, Receipt, Globe, BadgeCheck, User, Power, KeyRound, Copy, Check, Boxes, Save, Info, Lock, Smartphone, RotateCcw, Trash2, AlertTriangle, ShieldAlert, Wrench, Sparkles } from 'lucide-react';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
 import api from '../../api/axios';
@@ -362,6 +362,8 @@ export default function HospitalDetail() {
 
       <PatientLoginCard hospitalId={id} initialEnabled={hospital.patientLoginEnabled} isSuperAdmin={isSuperAdmin} />
 
+      <AiPreviewCard hospitalId={id} initialEnabled={hospital.aiImagePreviewEnabled} isSuperAdmin={isSuperAdmin} />
+
       <ModulesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
 
       <HospitalDoctorFeaturesCard hospitalId={id} isSuperAdmin={isSuperAdmin} />
@@ -431,6 +433,98 @@ export default function HospitalDetail() {
 // can sign into the patient portal / MedNote app. Opt-in (off by default); the
 // flag persists via the standard hospital update endpoint and gates the
 // patient-auth login scan on the backend. Super-admin only.
+// Paid AI image preview for this hospital — Dermatology → Patient preview
+// ("Create AI preview"). Off by default because every use costs money; usage
+// below comes from Ai_Usage. The OpenAI key itself lives in Settings → AI
+// image preview.
+function AiPreviewCard({ hospitalId, initialEnabled, isSuperAdmin }) {
+  const [enabled, setEnabled] = useState(!!initialEnabled);
+  const [saving, setSaving] = useState(false);
+  const [usage, setUsage] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(endpoints.hospitals.aiUsage(hospitalId))
+      .then((res) => { if (!cancelled) setUsage(res.data?.data || null); })
+      .catch(() => { if (!cancelled) setUsage(null); });
+    return () => { cancelled = true; };
+  }, [hospitalId]);
+
+  const toggle = async () => {
+    if (!isSuperAdmin || saving) return;
+    const next = !enabled;
+    setSaving(true);
+    try {
+      await api.put(endpoints.hospitals.update(hospitalId), { aiImagePreviewEnabled: next });
+      setEnabled(next);
+      toast.success(next ? 'AI image preview enabled' : 'AI image preview disabled');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update AI image preview');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className="p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-violet-500" /> AI image preview
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 max-w-md">
+            {enabled
+              ? 'Doctors at this hospital can create a realistic AI "expected result" photo in Dermatology → Patient preview. Each preview is a paid AI call.'
+              : 'Off — doctors at this hospital only get the free in-browser preview. Turn on to allow paid AI previews.'}
+          </p>
+          {usage && !usage.configured && (
+            <p className="text-xs text-amber-700 dark:text-amber-400 mt-2">No OpenAI key is set in Settings → AI image preview, so it won&apos;t work yet.</p>
+          )}
+          {usage?.provider === 'gemini' && (
+            <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">Using Google Gemini (server key) until an OpenAI key is saved in Settings.</p>
+          )}
+        </div>
+        <label className={`flex items-center gap-2 shrink-0 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'}`}>
+          <span className={`text-xs font-medium ${enabled ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-500 dark:text-slate-400'}`}>
+            {enabled ? 'Enabled' : 'Disabled'}
+          </span>
+          <div
+            onClick={toggle}
+            role="switch"
+            aria-checked={enabled}
+            aria-label="AI image preview"
+            className={`w-9 h-5 rounded-full relative transition-colors flex-shrink-0 ${enabled ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-slate-600'} ${saving ? 'opacity-60' : ''}`}
+          >
+            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
+          </div>
+        </label>
+      </div>
+      {usage && (
+        <div className="grid grid-cols-3 gap-3 mt-4">
+          {[
+            ['Today', `${usage.today}${usage.dailyLimit ? ` / ${usage.dailyLimit}` : ''}`],
+            ['This month', usage.thisMonth],
+            ['All time', usage.total],
+          ].map(([label, n]) => (
+            <div key={label} className="rounded-lg bg-gray-50 dark:bg-slate-800/60 p-3">
+              <p className="text-xs text-gray-500 dark:text-slate-400">{label}</p>
+              <p className="text-lg font-semibold text-gray-900 dark:text-slate-100">{n}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {usage?.failedThisMonth > 0 && (
+        <p className="text-xs text-gray-500 dark:text-slate-400 mt-2">{usage.failedThisMonth} failed this month (not counted against the limit).</p>
+      )}
+      {!isSuperAdmin && (
+        <p className="text-xs text-gray-400 dark:text-slate-500 flex items-center gap-1.5 pt-4 mt-4 border-t border-gray-200 dark:border-slate-700">
+          <Lock className="w-3.5 h-3.5" /> Only a super admin can change AI image preview.
+        </p>
+      )}
+    </Card>
+  );
+}
+
 function PatientLoginCard({ hospitalId, initialEnabled, isSuperAdmin }) {
   const [enabled, setEnabled] = useState(!!initialEnabled);
   const [saving, setSaving] = useState(false);

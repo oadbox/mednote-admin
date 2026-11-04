@@ -6,7 +6,7 @@
 // says whether one is set.
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { CreditCard, Receipt, PlugZap, RefreshCw, Copy, Check, Eye, EyeOff, KeyRound, BellRing, Upload } from 'lucide-react';
+import { CreditCard, Receipt, PlugZap, RefreshCw, Copy, Check, Eye, EyeOff, KeyRound, BellRing, Upload, Sparkles } from 'lucide-react';
 import dayjs from 'dayjs';
 import api from '../../api/axios';
 import endpoints from '../../api/endpoints';
@@ -513,6 +513,139 @@ export function FirebasePushCard({ canEdit }) {
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="secondary" icon={PlugZap} loading={testing} onClick={test} disabled={!serviceAccount.trim() && !cfg.hasServiceAccount}>Test key</Button>
               <Button type="button" loading={saving} onClick={save}>Save push settings</Button>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// Paid AI image previews (OpenAI) — Dermatology → Patient preview ("Create AI
+// preview"). The key is write-only here (encrypted at rest). Each hospital
+// must also be switched on from its page (AI image preview); usage is counted
+// per hospital. Backend: integrations.openai + services/tenant/
+// dermPreviewAi.service.js (falls back to GEMINI_API_KEY when no key is saved).
+const selectClass = 'w-full rounded-lg border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-900 dark:text-slate-100 disabled:opacity-60';
+
+export function OpenAiCard({ canEdit }) {
+  const [cfg, setCfg] = useState(null);
+  const [form, setForm] = useState({ enabled: true, apiKey: '', model: 'gpt-image-1', quality: 'medium', dailyLimit: 100 });
+  const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get(endpoints.integrations.get)
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data?.data || res.data;
+        setCfg(data);
+        const o = data.openai || {};
+        setForm({ enabled: Boolean(o.enabled), apiKey: '', model: o.model || 'gpt-image-1', quality: o.quality || 'medium', dailyLimit: o.dailyLimit ?? 100 });
+      })
+      .catch((err) => { if (!cancelled) toast.error(serverError(err, 'Failed to load OpenAI settings')); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const set = (k) => (v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const body = { enabled: form.enabled, model: form.model.trim(), quality: form.quality, dailyLimit: Number(form.dailyLimit) || 0 };
+      if (form.apiKey.trim()) body.apiKey = form.apiKey.trim();
+      const res = await api.put(endpoints.integrations.update, { openai: body });
+      setCfg(res.data?.data || res.data);
+      setForm((f) => ({ ...f, apiKey: '' }));
+      toast.success('OpenAI settings saved');
+    } catch (err) {
+      toast.error(serverError(err, 'Failed to save'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    setSaving(true);
+    try {
+      const res = await api.put(endpoints.integrations.update, { openai: { apiKey: null } });
+      setCfg(res.data?.data || res.data);
+      toast.success('OpenAI key removed');
+    } catch (err) {
+      toast.error(serverError(err, 'Failed to remove the key'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const test = async () => {
+    setTesting(true);
+    try {
+      const body = { model: form.model.trim() };
+      if (form.apiKey.trim()) body.apiKey = form.apiKey.trim();
+      const res = await api.post(endpoints.integrations.testOpenai, body);
+      toast.success(res.data?.message || 'OpenAI key works');
+    } catch (err) {
+      toast.error(serverError(err, 'Could not reach OpenAI'), { duration: 8000 });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const o = cfg?.openai;
+  const models = o?.models || ['gpt-image-1'];
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-violet-100 dark:bg-violet-500/20 rounded-lg flex items-center justify-center">
+            <Sparkles className="w-4 h-4 text-violet-600 dark:text-violet-300" />
+          </div>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-100">AI image preview (OpenAI)</h2>
+        </div>
+        {o && (o.enabled && o.configured ? <Badge color="success">On</Badge> : o.configured ? <Badge color="warning">Key saved, off</Badge> : <Badge>Not set up</Badge>)}
+      </div>
+      <p className="text-xs text-gray-500 dark:text-slate-400 mb-4">
+        &ldquo;Create AI preview&rdquo; in Dermatology → Patient preview: a realistic &ldquo;expected result&rdquo; photo for the visit&apos;s procedure (hair
+        regrowth, acne, pigmentation, lines, under-eye, laser hair). Each click sends the patient&apos;s photo to OpenAI (with the patient&apos;s recorded
+        agreement) and is charged to this OpenAI account. It only appears for hospitals you switch on from their page (AI image preview), and each
+        hospital is capped at the daily limit below.
+        {o?.fromEnv && ' The key currently comes from the server environment (OPENAI_API_KEY); saving one here replaces it.'}
+      </p>
+      {!cfg ? (
+        <div className="py-10 flex justify-center"><Spinner size="md" /></div>
+      ) : (
+        <div className="space-y-4">
+          <Toggle label="Allow AI image previews" checked={form.enabled} onChange={set('enabled')} disabled={!canEdit} />
+          <SecretField
+            label={`OpenAI API key${o.hasApiKey ? ` (saved ${o.apiKeyHint} — leave blank to keep)` : ''}`}
+            value={form.apiKey}
+            onChange={set('apiKey')}
+            disabled={!canEdit}
+            hint="From platform.openai.com → API keys. Starts with sk-. The account needs image generation access and billing."
+          />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label htmlFor="openai-model" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Model</label>
+              <select id="openai-model" className={selectClass} value={form.model} onChange={(e) => set('model')(e.target.value)} disabled={!canEdit}>
+                {[...new Set([...models, form.model])].map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="openai-quality" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Quality</label>
+              <select id="openai-quality" className={selectClass} value={form.quality} onChange={(e) => set('quality')(e.target.value)} disabled={!canEdit}>
+                {(o.qualities || ['low', 'medium', 'high']).map((q) => <option key={q} value={q}>{q[0].toUpperCase() + q.slice(1)}</option>)}
+              </select>
+            </div>
+            <Input label="Daily limit per hospital" type="number" min="0" max="10000" value={form.dailyLimit} onChange={(e) => set('dailyLimit')(e.target.value)} disabled={!canEdit} />
+          </div>
+          <p className="text-xs text-gray-500 dark:text-slate-400">Higher quality looks better and costs more per preview. Daily limit 0 means no limit.</p>
+          {canEdit && (
+            <div className="flex flex-wrap justify-end gap-2">
+              {o.hasApiKey && !o.fromEnv && <Button type="button" variant="secondary" onClick={remove} disabled={saving}>Remove key</Button>}
+              <Button type="button" variant="secondary" icon={PlugZap} loading={testing} onClick={test} disabled={!form.apiKey && !o.configured}>Test key</Button>
+              <Button type="button" loading={saving} onClick={save}>Save OpenAI settings</Button>
             </div>
           )}
         </div>

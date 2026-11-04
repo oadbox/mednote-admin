@@ -17,7 +17,7 @@ import LocationSelect from '../../components/LocationSelect';
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
 import ThemeSettings from '../../components/ThemeSettings';
-import { PaymentsCard, OrgnestInvoicingCard, FirebasePushCard } from './IntegrationsCards';
+import { PaymentsCard, OrgnestInvoicingCard, FirebasePushCard, OpenAiCard } from './IntegrationsCards';
 
 const phoneRegex = /^[+\d][\d\s().-]{6,19}$/;
 
@@ -385,6 +385,7 @@ export default function SettingsPage() {
         <PaymentsCard canEdit={isSuperAdmin} />
         <OrgnestInvoicingCard canEdit={isSuperAdmin} />
         <FirebasePushCard canEdit={isSuperAdmin} />
+        <OpenAiCard canEdit={isSuperAdmin} />
         <LocationsCard canEdit={isSuperAdmin} />
       </div>
     </div>

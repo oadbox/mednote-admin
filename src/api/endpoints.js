@@ -42,6 +42,7 @@ const endpoints = {
     saveAccessRole: (id, role) => `${PLATFORM}/hospitals/${id}/access-control/${role}`,
     modules: (id) => `${PLATFORM}/hospitals/${id}/modules`,
     doctorFeatures: (id) => `${PLATFORM}/hospitals/${id}/doctor-features`,
+    aiUsage: (id) => `${PLATFORM}/hospitals/${id}/ai-usage`,
   },
 
   // Coupons
@@ -188,6 +189,7 @@ const endpoints = {
     testRazorpay: `${PLATFORM}/integrations/razorpay/test`,
     testOrgnest: `${PLATFORM}/integrations/orgnest/test`,
     testFirebase: `${PLATFORM}/integrations/firebase/test`,
+    testOpenai: `${PLATFORM}/integrations/openai/test`,
     orgnestStatus: `${PLATFORM}/integrations/orgnest/status`,
     orgnestRaise: `${PLATFORM}/integrations/orgnest/raise`,
     paymentEvents: `${PLATFORM}/integrations/payment-events`,
