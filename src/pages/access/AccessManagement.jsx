@@ -154,6 +154,7 @@ const BASELINE = {
     "dashboard:view",
     "patients:view",
     "appointments:view",
+    "appointments:create",
     "appointments:edit",
     "prescriptions:view",
     "prescriptions:create",
